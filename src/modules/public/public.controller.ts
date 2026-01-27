@@ -7,20 +7,28 @@ export class PublicController {
     try {
       const { page = 1, limit = 10, subject, category, minRating, maxRating, minPrice, maxPrice, sortBy = "averageRating", sortOrder = "desc" } = req.query;
 
-      const paginationOptions = paginationSortingHelper({
+      const paginationHelper = paginationSortingHelper({
         page: Number(page),
         limit: Number(limit),
         sortBy: sortBy as string,
         sortOrder: sortOrder as "asc" | "desc"
       });
 
+      const paginationOptions = {
+        skip: paginationHelper.skip,
+        take: paginationHelper.limit,
+        orderBy: {
+          [paginationHelper.sortBy]: paginationHelper.sortOrder as "asc" | "desc"
+        }
+      };
+
       const filters = {
-        subject: subject as string,
-        category: category as string,
-        minRating: minRating ? Number(minRating) : undefined,
-        maxRating: maxRating ? Number(maxRating) : undefined,
-        minPrice: minPrice ? Number(minPrice) : undefined,
-        maxPrice: maxPrice ? Number(maxPrice) : undefined,
+        ...(subject && { subject: subject as string }),
+        ...(category && { category: category as string }),
+        ...(minRating && { minRating: Number(minRating) }),
+        ...(maxRating && { maxRating: Number(maxRating) }),
+        ...(minPrice && { minPrice: Number(minPrice) }),
+        ...(maxPrice && { maxPrice: Number(maxPrice) }),
       };
 
       const result = await PublicService.searchTutors(filters, paginationOptions);
@@ -85,12 +93,20 @@ export class PublicController {
         });
       }
 
-      const paginationOptions = paginationSortingHelper({
+      const paginationHelper = paginationSortingHelper({
         page: Number(page),
         limit: Number(limit),
         sortBy: "createdAt",
         sortOrder: "desc"
       });
+
+      const paginationOptions = {
+        skip: paginationHelper.skip,
+        take: paginationHelper.limit,
+        orderBy: {
+          [paginationHelper.sortBy]: paginationHelper.sortOrder as "asc" | "desc"
+        }
+      };
 
       const result = await PublicService.getTutorReviews(tutorProfileId as string, paginationOptions);
 
@@ -113,12 +129,20 @@ export class PublicController {
     try {
       const { page = 1, limit = 12 } = req.query;
 
-      const paginationOptions = paginationSortingHelper({
+      const paginationHelper = paginationSortingHelper({
         page: Number(page),
         limit: Number(limit),
         sortBy: "averageRating",
         sortOrder: "desc"
       });
+
+      const paginationOptions = {
+        skip: paginationHelper.skip,
+        take: paginationHelper.limit,
+        orderBy: {
+          [paginationHelper.sortBy]: paginationHelper.sortOrder as "asc" | "desc"
+        }
+      };
 
       const result = await PublicService.getFeaturedTutors(paginationOptions);
 

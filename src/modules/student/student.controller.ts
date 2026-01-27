@@ -45,4 +45,39 @@ const createReview = async (req: Request, res: Response, next: NextFunction) => 
   }
 };
 
-export const StudentController = { updateProfile, getProfile, createReview };
+const createBooking = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { tutorProfileId, scheduledAt, duration, subject, notes } = req.body;
+    const result = await StudentService.createBooking(req.user!.id, { tutorProfileId, scheduledAt, duration, subject, notes });
+    
+    res.status(201).json({
+      success: true,
+      message: "Booking created successfully",
+      data: result
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+const getBookings = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { page = 1, limit = 10, status } = req.query;
+    const result = await StudentService.getBookings(req.user!.id, {
+      page: Number(page),
+      limit: Number(limit),
+      status: status as string
+    });
+    
+    res.status(200).json({
+      success: true,
+      message: "Bookings retrieved successfully",
+      data: result.data,
+      meta: result.meta
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const StudentController = { updateProfile, getProfile, createReview, createBooking, getBookings };
