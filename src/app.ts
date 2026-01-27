@@ -1,24 +1,26 @@
-import express from 'express';
-import cors from 'cors';
-// import authRoutes from './modules/auth/auth.routes';
+import express, { Application } from "express";
 import { toNodeHandler } from "better-auth/node";
-import { auth } from './lib/auth';
+import { auth } from "./lib/auth";
+import cors from 'cors';
+import errorHandler from "./middleware/globalErrorHandler";
+import { notFound } from "./middleware/notFound";
 
-const app = express();
-app.all('/api/auth/*splat', toNodeHandler(auth));
+const app: Application = express();
 
-app.use(cors({ origin: process.env.FRONTEND_URL || 'http://localhost:5173' }));
-app.use(express.json({ limit: '10mb' }));
+app.use(cors({
+    origin: process.env.APP_URL || "http://localhost:4000", // client side url
+    credentials: true
+}))
 
-// const limiter = rateLimit({
-//   windowMs: 15 * 60 * 1000,
-//   max: 100000,
-//   message: 'Too many requests',
-// });
-// app.use('/api/', limiter);
+app.use(express.json());
 
-// app.use('/api/auth', authRoutes);
+app.all("/api/auth/*splat", toNodeHandler(auth));
 
-app.get('/health', (_, res) => res.json({ status: 'ok' }));
+
+app.get("/", (req, res) => {
+    res.send("Hello, World!");
+});
+app.use(notFound)
+app.use(errorHandler)
 
 export default app;

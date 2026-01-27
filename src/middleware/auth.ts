@@ -1,22 +1,69 @@
-import { Request, Response, NextFunction } from 'express';
-import jwt from 'jsonwebtoken';
+import { NextFunction, Request, Response } from "express";
+import { auth as betterAuth } from "../lib/auth";
 
-export interface AuthRequest extends Request {
-  userId?: string;
+export enum UserRole {
+  STUDENT = "STUDENT",
+  TUTOR = "TUTOR",
+  ADMIN = "ADMIN"
 }
 
-export const authenticate = (req: AuthRequest, res: Response, next: NextFunction) => {
-  const token = req.headers.authorization?.split(' ')[1];
-
-  if (!token) {
-    return res.status(401).json({ error: 'Unauthorized' });
+declare global {
+  namespace Express {
+    interface Request {
+      user?: {
+        id: string;
+        email: string;
+        name: string;
+        role: string;
+        emailVerified: boolean;
+      };
+    }
   }
+}
 
-  try {
-    const decoded = jwt.verify(token, process.env.JWT_SECRET!) as { userId: string };
-    req.userId = decoded.userId;
-    next();
-  } catch {
-    return res.status(401).json({ error: 'Invalid token' });
-  }
+const auth = (...roles: UserRole[]) => {
+  return async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      // get user session
+      const session = await betterAuth.api.getSession({
+        headers: req.headers as any,
+      });
+
+      if (!session) {
+        return res.status(401).json({
+          success: false,
+          message: "You are not authorized!",
+        });
+      }
+
+      if (!session.user.emailVerified) {
+        return res.status(403).json({
+          success: false,
+          message: "Email verification required. Please verfiy your email!",
+        });
+      }
+
+      req.user = {
+        id: session.user.id,
+        email: session.user.email,
+        name: session.user.name,
+        role: session.user.role as string,
+        emailVerified: session.user.emailVerified,
+      };
+
+      if (roles.length && !roles.includes(req.user.role as UserRole)) {
+        return res.status(403).json({
+          success: false,
+          message:
+            "Forbidden! You don't have permission to access this resources!",
+        });
+      }
+
+      next();
+    } catch (err) {
+      next(err);
+    }
+  };
 };
+
+export default auth;
