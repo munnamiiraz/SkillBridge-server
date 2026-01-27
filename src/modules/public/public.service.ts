@@ -129,4 +129,52 @@ export class PublicService {
       }
     });
   }
+
+  static async getTutorReviews(tutorId: string, paginationOptions: PaginationOptions) {
+    const [reviews, total] = await Promise.all([
+      prisma.review.findMany({
+        where: {
+          booking: {
+            tutorId: tutorId
+          }
+        },
+        include: {
+          user: {
+            select: {
+              id: true,
+              name: true,
+              image: true
+            }
+          },
+          booking: {
+            select: {
+              id: true,
+              sessionDate: true
+            }
+          }
+        },
+        ...paginationOptions
+      }),
+      prisma.review.count({
+        where: {
+          booking: {
+            tutorId: tutorId
+          }
+        }
+      })
+    ]);
+
+    const totalPages = Math.ceil(total / paginationOptions.take);
+    const currentPage = Math.floor(paginationOptions.skip / paginationOptions.take) + 1;
+
+    return {
+      data: reviews,
+      meta: {
+        total,
+        page: currentPage,
+        limit: paginationOptions.take,
+        totalPages
+      }
+    };
+  }
 }

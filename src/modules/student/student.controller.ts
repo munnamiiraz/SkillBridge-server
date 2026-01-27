@@ -30,4 +30,19 @@ const getProfile = async (req: Request, res: Response, next: NextFunction) => {
   }
 };
 
-export const StudentController = { updateProfile, getProfile };
+const createReview = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { bookingId, rating, comment } = req.body;
+    const result = await StudentService.createReview(req.user!.id, { bookingId, rating, comment });
+    
+    res.status(201).json({
+      success: true,
+      message: "Review created successfully",
+      data: result
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const StudentController = { updateProfile, getProfile, createReview };

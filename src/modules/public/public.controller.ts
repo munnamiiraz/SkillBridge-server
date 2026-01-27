@@ -72,4 +72,39 @@ export class PublicController {
       });
     }
   }
+
+  static async getTutorReviews(req: Request, res: Response) {
+    try {
+      const { tutorId, page = 1, limit = 10 } = req.query;
+      
+      if (!tutorId) {
+        return res.status(400).json({
+          success: false,
+          message: "Tutor ID is required"
+        });
+      }
+
+      const paginationOptions = paginationSortingHelper({
+        page: Number(page),
+        limit: Number(limit),
+        sortBy: "createdAt",
+        sortOrder: "desc"
+      });
+
+      const result = await PublicService.getTutorReviews(tutorId as string, paginationOptions);
+
+      res.json({
+        success: true,
+        message: "Reviews retrieved successfully",
+        data: result.data,
+        meta: result.meta
+      });
+    } catch (error) {
+      res.status(500).json({
+        success: false,
+        message: "Failed to get reviews",
+        error: error instanceof Error ? error.message : "Unknown error"
+      });
+    }
+  }
 }
