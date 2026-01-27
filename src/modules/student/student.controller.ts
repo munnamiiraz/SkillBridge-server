@@ -80,4 +80,23 @@ const getBookings = async (req: Request, res: Response, next: NextFunction) => {
   }
 };
 
-export const StudentController = { updateProfile, getProfile, createReview, createBooking, getBookings };
+const getReviewableBookings = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { page = 1, limit = 10 } = req.query;
+    const result = await StudentService.getReviewableBookings(req.user!.id, {
+      page: Number(page),
+      limit: Number(limit)
+    });
+    
+    res.status(200).json({
+      success: true,
+      message: "Reviewable bookings retrieved successfully",
+      data: result.data,
+      meta: result.meta
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const StudentController = { updateProfile, getProfile, createReview, createBooking, getBookings, getReviewableBookings };

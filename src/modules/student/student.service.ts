@@ -35,6 +35,17 @@ const createReview = async (studentId: string, data: CreateReviewInput) => {
     throw new Error("Booking not found or doesn't belong to you");
   }
   
+  // Check if booking is completed
+  if (booking.status !== "COMPLETED") {
+    throw new Error("You can only review completed sessions");
+  }
+  
+  // Check if session time has passed
+  const sessionEndTime = new Date(booking.scheduledAt.getTime() + booking.duration * 60000);
+  if (sessionEndTime > new Date()) {
+    throw new Error("You can only review after the session has ended");
+  }
+  
   // Check if review already exists for this booking
   const existingReview = await prisma.review.findUnique({
     where: { bookingId: validatedData.bookingId }
@@ -184,4 +195,68 @@ const getBookings = async (studentId: string, options: { page: number; limit: nu
   };
 };
 
-export const StudentService = { updateProfile, getProfile, createReview, createBooking, getBookings };
+const getReviewableBookings = async (studentId: string, options: { page: number; limit: number }) => {
+  const paginationHelper = paginationSortingHelper({
+    page: options.page,
+    limit: options.limit,
+    sortBy: "scheduledAt",
+    sortOrder: "desc"
+  });
+
+  const currentTime = new Date();
+  
+  const [bookings, total] = await Promise.all([
+    prisma.booking.findMany({
+      where: {
+        studentId: studentId,
+        status: "COMPLETED",
+        scheduledAt: {
+          lt: new Date(currentTime.getTime() - 60 * 60000) // At least 1 hour ago
+        },
+        review: null // No review exists
+      },
+      include: {
+        tutor_profile: {
+          include: {
+            user: {
+              select: {
+                id: true,
+                name: true,
+                image: true
+              }
+            }
+          }
+        }
+      },
+      skip: paginationHelper.skip,
+      take: paginationHelper.limit,
+      orderBy: {
+        scheduledAt: paginationHelper.sortOrder as "asc" | "desc"
+      }
+    }),
+    prisma.booking.count({
+      where: {
+        studentId: studentId,
+        status: "COMPLETED",
+        scheduledAt: {
+          lt: new Date(currentTime.getTime() - 60 * 60000)
+        },
+        review: null
+      }
+    })
+  ]);
+
+  const totalPages = Math.ceil(total / paginationHelper.limit);
+
+  return {
+    data: bookings,
+    meta: {
+      total,
+      page: paginationHelper.page,
+      limit: paginationHelper.limit,
+      totalPages
+    }
+  };
+};
+
+export const StudentService = { updateProfile, getProfile, createReview, createBooking, getBookings, getReviewableBookings };
