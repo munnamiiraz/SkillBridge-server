@@ -4,6 +4,7 @@ import { auth } from "./lib/auth";
 import cors from 'cors';
 import errorHandler from "./middleware/globalErrorHandler";
 import { notFound } from "./middleware/notFound";
+import { StudentRoutes } from "./modules/student/student.route";
 
 const app: Application = express();
 
@@ -16,6 +17,7 @@ app.use(express.json());
 
 app.all("/api/auth/*splat", toNodeHandler(auth));
 
+app.use("/api/student", StudentRoutes);
 
 app.get("/", (req, res) => {
     res.send("Hello, World!");
