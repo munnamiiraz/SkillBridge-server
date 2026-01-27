@@ -137,7 +137,10 @@ export const auth = betterAuth({
   },
 
 
-  trustedOrigins: [process.env.APP_URL || "http://localhost:3000"],
+  trustedOrigins: [
+    process.env.APP_URL || "http://localhost:3000",
+    "http://localhost:9000"
+  ],
   user: {
     additionalFields: {
       role: {
