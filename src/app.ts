@@ -6,6 +6,7 @@ import errorHandler from "./middleware/globalErrorHandler";
 import { notFound } from "./middleware/notFound";
 import { StudentRoutes } from "./modules/student/student.route";
 import { TutorRoutes } from "./modules/tutor/tutor.route";
+import { PublicRoutes } from "./modules/public/public.route";
 
 const app: Application = express();
 
@@ -18,6 +19,7 @@ app.use(express.json());
 
 app.all("/api/auth/*splat", toNodeHandler(auth));
 
+app.use("/api/public", PublicRoutes);
 app.use("/api/student", StudentRoutes);
 app.use("/api/tutor", TutorRoutes);
 
