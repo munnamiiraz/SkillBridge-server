@@ -107,6 +107,7 @@ model tutor_profile {
   bio               String?
   headline          String?
   hourlyRate        Float
+  address           String?
   experience        Int                 @default(0)
   education         String?
   isAvailable       Boolean             @default(true)
@@ -138,6 +139,7 @@ model user {
   phone         String         @default("N/A")
   email         String         @unique
   emailVerified Boolean        @default(false)
+  address       String?
   image         String?
   role          Role           @default(STUDENT)
   status        UserStatus     @default(ACTIVE)
