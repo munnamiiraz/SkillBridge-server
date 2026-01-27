@@ -1,6 +1,6 @@
 import { prisma } from "../../lib/prisma";
 import { updateProfileSchema, UpdateProfileInput, createReviewSchema, CreateReviewInput } from "./student.validation";
-import { v4 as uuidv4 } from "uuid";
+import { randomUUID } from "crypto";
 
 const updateProfile = async (userId: string, data: UpdateProfileInput) => {
   const validatedData = updateProfileSchema.parse(data);
@@ -43,7 +43,7 @@ const createReview = async (studentId: string, data: CreateReviewInput) => {
   
   return await prisma.review.create({
     data: {
-      id: uuidv4(),
+      id: randomUUID(),
       bookingId: validatedData.bookingId,
       studentId: studentId,
       rating: validatedData.rating,
@@ -53,10 +53,14 @@ const createReview = async (studentId: string, data: CreateReviewInput) => {
     include: {
       booking: {
         include: {
-          tutor: {
-            select: {
-              id: true,
-              name: true
+          tutor_profile: {
+            include: {
+              user: {
+                select: {
+                  id: true,
+                  name: true
+                }
+              }
             }
           }
         }

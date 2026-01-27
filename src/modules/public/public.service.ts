@@ -2,6 +2,7 @@ import { prisma } from "../../lib/prisma";
 
 interface SearchFilters {
   subject?: string;
+  category?: string;
   minRating?: number;
   maxRating?: number;
   minPrice?: number;
@@ -30,6 +31,21 @@ export class PublicService {
             name: {
               contains: filters.subject,
               mode: "insensitive"
+            }
+          }
+        }
+      };
+    }
+
+    if (filters.category) {
+      whereClause.tutor_subject = {
+        some: {
+          subject: {
+            category: {
+              name: {
+                contains: filters.category,
+                mode: "insensitive"
+              }
             }
           }
         }
@@ -130,12 +146,12 @@ export class PublicService {
     });
   }
 
-  static async getTutorReviews(tutorId: string, paginationOptions: PaginationOptions) {
+  static async getTutorReviews(tutorProfileId: string, paginationOptions: PaginationOptions) {
     const [reviews, total] = await Promise.all([
       prisma.review.findMany({
         where: {
           booking: {
-            tutorId: tutorId
+            tutorProfileId: tutorProfileId
           }
         },
         include: {
@@ -149,7 +165,7 @@ export class PublicService {
           booking: {
             select: {
               id: true,
-              sessionDate: true
+              scheduledAt: true
             }
           }
         },
@@ -158,7 +174,7 @@ export class PublicService {
       prisma.review.count({
         where: {
           booking: {
-            tutorId: tutorId
+            tutorProfileId: tutorProfileId
           }
         }
       })
@@ -169,6 +185,61 @@ export class PublicService {
 
     return {
       data: reviews,
+      meta: {
+        total,
+        page: currentPage,
+        limit: paginationOptions.take,
+        totalPages
+      }
+    };
+  }
+
+  static async getFeaturedTutors(paginationOptions: PaginationOptions) {
+    const [tutors, total] = await Promise.all([
+      prisma.tutor_profile.findMany({
+        where: {
+          isFeatured: true,
+          isAvailable: true,
+          user: {
+            status: "ACTIVE"
+          }
+        },
+        include: {
+          user: {
+            select: {
+              id: true,
+              name: true,
+              image: true
+            }
+          },
+          tutor_subject: {
+            include: {
+              subject: {
+                include: {
+                  category: true
+                }
+              }
+            }
+          }
+        },
+        ...paginationOptions
+      }),
+      prisma.tutor_profile.count({
+        where: {
+          isFeatured: true,
+          isAvailable: true,
+          user: {
+            status: "ACTIVE"
+          }
+        }
+      })
+    ]);
+
+    const totalPages = Math.ceil(total / paginationOptions.take);
+    const currentPage = Math.floor(paginationOptions.skip / paginationOptions.take) + 1;
+
+    return {
+      data: tutors,
       meta: {
         total,
         page: currentPage,

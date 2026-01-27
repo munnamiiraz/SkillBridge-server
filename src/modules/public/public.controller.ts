@@ -5,7 +5,7 @@ import paginationSortingHelper from "../../helpers/paginationSortingHelper";
 export class PublicController {
   static async searchTutors(req: Request, res: Response) {
     try {
-      const { page = 1, limit = 10, subject, minRating, maxRating, minPrice, maxPrice, sortBy = "averageRating", sortOrder = "desc" } = req.query;
+      const { page = 1, limit = 10, subject, category, minRating, maxRating, minPrice, maxPrice, sortBy = "averageRating", sortOrder = "desc" } = req.query;
 
       const paginationOptions = paginationSortingHelper({
         page: Number(page),
@@ -16,6 +16,7 @@ export class PublicController {
 
       const filters = {
         subject: subject as string,
+        category: category as string,
         minRating: minRating ? Number(minRating) : undefined,
         maxRating: maxRating ? Number(maxRating) : undefined,
         minPrice: minPrice ? Number(minPrice) : undefined,
@@ -75,12 +76,12 @@ export class PublicController {
 
   static async getTutorReviews(req: Request, res: Response) {
     try {
-      const { tutorId, page = 1, limit = 10 } = req.query;
+      const { tutorProfileId, page = 1, limit = 10 } = req.query;
       
-      if (!tutorId) {
+      if (!tutorProfileId) {
         return res.status(400).json({
           success: false,
-          message: "Tutor ID is required"
+          message: "Tutor Profile ID is required"
         });
       }
 
@@ -91,7 +92,7 @@ export class PublicController {
         sortOrder: "desc"
       });
 
-      const result = await PublicService.getTutorReviews(tutorId as string, paginationOptions);
+      const result = await PublicService.getTutorReviews(tutorProfileId as string, paginationOptions);
 
       res.json({
         success: true,
@@ -103,6 +104,34 @@ export class PublicController {
       res.status(500).json({
         success: false,
         message: "Failed to get reviews",
+        error: error instanceof Error ? error.message : "Unknown error"
+      });
+    }
+  }
+
+  static async getFeaturedTutors(req: Request, res: Response) {
+    try {
+      const { page = 1, limit = 12 } = req.query;
+
+      const paginationOptions = paginationSortingHelper({
+        page: Number(page),
+        limit: Number(limit),
+        sortBy: "averageRating",
+        sortOrder: "desc"
+      });
+
+      const result = await PublicService.getFeaturedTutors(paginationOptions);
+
+      res.json({
+        success: true,
+        message: "Featured tutors retrieved successfully",
+        data: result.data,
+        meta: result.meta
+      });
+    } catch (error) {
+      res.status(500).json({
+        success: false,
+        message: "Failed to get featured tutors",
         error: error instanceof Error ? error.message : "Unknown error"
       });
     }
