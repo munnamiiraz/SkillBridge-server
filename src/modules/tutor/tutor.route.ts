@@ -14,4 +14,7 @@ router.get("/availability-slots", auth(UserRole.TUTOR), TutorController.getAvail
 router.patch("/availability-slots/:slotId", auth(UserRole.TUTOR), TutorController.updateAvailabilitySlot);
 router.delete("/availability-slots/:slotId", auth(UserRole.TUTOR), TutorController.deleteAvailabilitySlot);
 
+// Teaching sessions routes
+router.get("/sessions", auth(UserRole.TUTOR), TutorController.getTeachingSessions);
+
 export const TutorRoutes = router;

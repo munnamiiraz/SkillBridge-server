@@ -1,6 +1,7 @@
 import { prisma } from "../../lib/prisma";
 import { createTutorProfileSchema, updateTutorProfileSchema, CreateTutorProfileInput, UpdateTutorProfileInput, createAvailabilitySlotSchema, updateAvailabilitySlotSchema, CreateAvailabilitySlotInput, UpdateAvailabilitySlotInput } from "./tutor.validation";
 import { randomUUID } from "crypto";
+import paginationSortingHelper from "../../helpers/paginationSortingHelper";
 
 const createProfile = async (userId: string, data: CreateTutorProfileInput) => {
   const validatedData = createTutorProfileSchema.parse(data);
@@ -167,4 +168,71 @@ const deleteAvailabilitySlot = async (userId: string, slotId: string) => {
   });
 };
 
-export const TutorService = { createProfile, updateProfile, getProfile, createAvailabilitySlot, updateAvailabilitySlot, getAvailabilitySlots, deleteAvailabilitySlot };
+const getTeachingSessions = async (userId: string, options: { page: number; limit: number; status?: string }) => {
+  const tutorProfile = await prisma.tutor_profile.findUnique({
+    where: { userId }
+  });
+  
+  if (!tutorProfile) {
+    throw new Error("Tutor profile not found");
+  }
+  
+  const paginationHelper = paginationSortingHelper({
+    page: options.page,
+    limit: options.limit,
+    sortBy: "scheduledAt",
+    sortOrder: "desc"
+  });
+
+  const whereClause: any = {
+    tutorProfileId: tutorProfile.id
+  };
+
+  if (options.status) {
+    whereClause.status = options.status;
+  }
+
+  const [sessions, total] = await Promise.all([
+    prisma.booking.findMany({
+      where: whereClause,
+      include: {
+        student: {
+          select: {
+            id: true,
+            name: true,
+            image: true,
+            email: true
+          }
+        },
+        review: {
+          select: {
+            id: true,
+            rating: true,
+            comment: true,
+            createdAt: true
+          }
+        }
+      },
+      skip: paginationHelper.skip,
+      take: paginationHelper.limit,
+      orderBy: {
+        scheduledAt: paginationHelper.sortOrder as "asc" | "desc"
+      }
+    }),
+    prisma.booking.count({ where: whereClause })
+  ]);
+
+  const totalPages = Math.ceil(total / paginationHelper.limit);
+
+  return {
+    data: sessions,
+    meta: {
+      total,
+      page: paginationHelper.page,
+      limit: paginationHelper.limit,
+      totalPages
+    }
+  };
+};
+
+export const TutorService = { createProfile, updateProfile, getProfile, createAvailabilitySlot, updateAvailabilitySlot, getAvailabilitySlots, deleteAvailabilitySlot, getTeachingSessions };

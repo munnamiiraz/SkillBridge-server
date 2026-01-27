@@ -100,4 +100,24 @@ const deleteAvailabilitySlot = async (req: Request, res: Response, next: NextFun
   }
 };
 
-export const TutorController = { createProfile, updateProfile, getProfile, createAvailabilitySlot, updateAvailabilitySlot, getAvailabilitySlots, deleteAvailabilitySlot };
+const getTeachingSessions = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { page = 1, limit = 10, status } = req.query;
+    const result = await TutorService.getTeachingSessions(req.user!.id, {
+      page: Number(page),
+      limit: Number(limit),
+      status: status as string
+    });
+    
+    res.status(200).json({
+      success: true,
+      message: "Teaching sessions retrieved successfully",
+      data: result.data,
+      meta: result.meta
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const TutorController = { createProfile, updateProfile, getProfile, createAvailabilitySlot, updateAvailabilitySlot, getAvailabilitySlots, deleteAvailabilitySlot, getTeachingSessions };
