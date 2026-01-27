@@ -43,4 +43,61 @@ const getProfile = async (req: Request, res: Response, next: NextFunction) => {
   }
 };
 
-export const TutorController = { createProfile, updateProfile, getProfile };
+const createAvailabilitySlot = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const result = await TutorService.createAvailabilitySlot(req.user!.id, req.body);
+    
+    res.status(201).json({
+      success: true,
+      message: "Availability slot created successfully",
+      data: result
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+const updateAvailabilitySlot = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { slotId } = req.params;
+    const result = await TutorService.updateAvailabilitySlot(req.user!.id, slotId, req.body);
+    
+    res.status(200).json({
+      success: true,
+      message: "Availability slot updated successfully",
+      data: result
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+const getAvailabilitySlots = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const result = await TutorService.getAvailabilitySlots(req.user!.id);
+    
+    res.status(200).json({
+      success: true,
+      message: "Availability slots retrieved successfully",
+      data: result
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+const deleteAvailabilitySlot = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { slotId } = req.params;
+    await TutorService.deleteAvailabilitySlot(req.user!.id, slotId);
+    
+    res.status(200).json({
+      success: true,
+      message: "Availability slot deleted successfully"
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const TutorController = { createProfile, updateProfile, getProfile, createAvailabilitySlot, updateAvailabilitySlot, getAvailabilitySlots, deleteAvailabilitySlot };

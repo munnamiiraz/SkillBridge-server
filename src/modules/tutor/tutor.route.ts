@@ -8,4 +8,10 @@ router.post("/profile", auth(UserRole.TUTOR), TutorController.createProfile);
 router.get("/profile", auth(UserRole.TUTOR), TutorController.getProfile);
 router.patch("/profile", auth(UserRole.TUTOR), TutorController.updateProfile);
 
+// Availability slots routes
+router.post("/availability-slots", auth(UserRole.TUTOR), TutorController.createAvailabilitySlot);
+router.get("/availability-slots", auth(UserRole.TUTOR), TutorController.getAvailabilitySlots);
+router.patch("/availability-slots/:slotId", auth(UserRole.TUTOR), TutorController.updateAvailabilitySlot);
+router.delete("/availability-slots/:slotId", auth(UserRole.TUTOR), TutorController.deleteAvailabilitySlot);
+
 export const TutorRoutes = router;
