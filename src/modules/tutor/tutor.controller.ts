@@ -59,7 +59,7 @@ const createAvailabilitySlot = async (req: Request, res: Response, next: NextFun
 
 const updateAvailabilitySlot = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const { slotId } = req.params;
+    const slotId = req.params.slotId as string;
     const result = await TutorService.updateAvailabilitySlot(req.user!.id, slotId, req.body);
     
     res.status(200).json({
@@ -88,7 +88,7 @@ const getAvailabilitySlots = async (req: Request, res: Response, next: NextFunct
 
 const deleteAvailabilitySlot = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const { slotId } = req.params;
+    const slotId = req.params.slotId as string;
     await TutorService.deleteAvailabilitySlot(req.user!.id, slotId);
     
     res.status(200).json({
@@ -106,7 +106,7 @@ const getTeachingSessions = async (req: Request, res: Response, next: NextFuncti
     const result = await TutorService.getTeachingSessions(req.user!.id, {
       page: Number(page),
       limit: Number(limit),
-      status: status as string
+      ...(status && typeof status === 'string' && { status })
     });
     
     res.status(200).json({
@@ -120,4 +120,38 @@ const getTeachingSessions = async (req: Request, res: Response, next: NextFuncti
   }
 };
 
-export const TutorController = { createProfile, updateProfile, getProfile, createAvailabilitySlot, updateAvailabilitySlot, getAvailabilitySlots, deleteAvailabilitySlot, getTeachingSessions };
+const getReviews = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { page = 1, limit = 10, rating } = req.query;
+    const result = await TutorService.getReviews(req.user!.id, {
+      page: Number(page),
+      limit: Number(limit),
+      ...(rating && { rating: Number(rating) })
+    });
+    
+    res.status(200).json({
+      success: true,
+      message: "Reviews retrieved successfully",
+      data: result.data,
+      meta: result.meta
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+const getRatingStats = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const result = await TutorService.getRatingStats(req.user!.id);
+    
+    res.status(200).json({
+      success: true,
+      message: "Rating statistics retrieved successfully",
+      data: result
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const TutorController = { createProfile, updateProfile, getProfile, createAvailabilitySlot, updateAvailabilitySlot, getAvailabilitySlots, deleteAvailabilitySlot, getTeachingSessions, getReviews, getRatingStats };

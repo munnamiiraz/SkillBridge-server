@@ -17,4 +17,8 @@ router.delete("/availability-slots/:slotId", auth(UserRole.TUTOR), TutorControll
 // Teaching sessions routes
 router.get("/sessions", auth(UserRole.TUTOR), TutorController.getTeachingSessions);
 
+// Reviews and ratings routes
+router.get("/reviews", auth(UserRole.TUTOR), TutorController.getReviews);
+router.get("/rating-stats", auth(UserRole.TUTOR), TutorController.getRatingStats);
+
 export const TutorRoutes = router;

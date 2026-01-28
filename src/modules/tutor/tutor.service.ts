@@ -235,4 +235,132 @@ const getTeachingSessions = async (userId: string, options: { page: number; limi
   };
 };
 
-export const TutorService = { createProfile, updateProfile, getProfile, createAvailabilitySlot, updateAvailabilitySlot, getAvailabilitySlots, deleteAvailabilitySlot, getTeachingSessions };
+const getReviews = async (userId: string, options: { page: number; limit: number; rating?: number }) => {
+  const tutorProfile = await prisma.tutor_profile.findUnique({
+    where: { userId }
+  });
+  
+  if (!tutorProfile) {
+    throw new Error("Tutor profile not found");
+  }
+  
+  const paginationHelper = paginationSortingHelper({
+    page: options.page,
+    limit: options.limit,
+    sortBy: "createdAt",
+    sortOrder: "desc"
+  });
+
+  const whereClause: any = {
+    booking: {
+      tutorProfileId: tutorProfile.id
+    }
+  };
+
+  if (options.rating) {
+    whereClause.rating = options.rating;
+  }
+
+  const [reviews, total] = await Promise.all([
+    prisma.review.findMany({
+      where: whereClause,
+      include: {
+        student: {
+          select: {
+            id: true,
+            name: true,
+            image: true
+          }
+        },
+        booking: {
+          select: {
+            id: true,
+            scheduledAt: true,
+            subject: true,
+            duration: true
+          }
+        }
+      },
+      skip: paginationHelper.skip,
+      take: paginationHelper.limit,
+      orderBy: {
+        createdAt: paginationHelper.sortOrder as "asc" | "desc"
+      }
+    }),
+    prisma.review.count({ where: whereClause })
+  ]);
+
+  const totalPages = Math.ceil(total / paginationHelper.limit);
+
+  return {
+    data: reviews,
+    meta: {
+      total,
+      page: paginationHelper.page,
+      limit: paginationHelper.limit,
+      totalPages
+    }
+  };
+};
+
+const getRatingStats = async (userId: string) => {
+  const tutorProfile = await prisma.tutor_profile.findUnique({
+    where: { userId }
+  });
+  
+  if (!tutorProfile) {
+    throw new Error("Tutor profile not found");
+  }
+
+  const [ratingDistribution, totalReviews, averageRating] = await Promise.all([
+    prisma.review.groupBy({
+      by: ['rating'],
+      where: {
+        booking: {
+          tutorProfileId: tutorProfile.id
+        }
+      },
+      _count: {
+        rating: true
+      },
+      orderBy: {
+        rating: 'desc'
+      }
+    }),
+    prisma.review.count({
+      where: {
+        booking: {
+          tutorProfileId: tutorProfile.id
+        }
+      }
+    }),
+    prisma.review.aggregate({
+      where: {
+        booking: {
+          tutorProfileId: tutorProfile.id
+        }
+      },
+      _avg: {
+        rating: true
+      }
+    })
+  ]);
+
+  // Create rating distribution with all ratings (1-5)
+  const distribution = [5, 4, 3, 2, 1].map(rating => {
+    const found = ratingDistribution.find(r => r.rating === rating);
+    return {
+      rating,
+      count: found ? found._count.rating : 0,
+      percentage: totalReviews > 0 ? Math.round((found ? found._count.rating : 0) / totalReviews * 100) : 0
+    };
+  });
+
+  return {
+    totalReviews,
+    averageRating: averageRating._avg.rating ? Number(averageRating._avg.rating.toFixed(1)) : 0,
+    distribution
+  };
+};
+
+export const TutorService = { createProfile, updateProfile, getProfile, createAvailabilitySlot, updateAvailabilitySlot, getAvailabilitySlots, deleteAvailabilitySlot, getTeachingSessions, getReviews, getRatingStats };
