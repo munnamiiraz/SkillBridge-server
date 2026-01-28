@@ -22,6 +22,20 @@ export const banUserSchema = z.object({
   banReason: z.string().min(1, "Ban reason is required").max(500, "Ban reason must be less than 500 characters")
 });
 
+export const createCategorySchema = z.object({
+  name: z.string().min(1, "Category name is required").max(100, "Category name must be less than 100 characters"),
+  description: z.string().optional(),
+  image: z.string().url("Invalid image URL").optional()
+});
+
+export const updateCategorySchema = z.object({
+  name: z.string().min(1, "Category name is required").max(100, "Category name must be less than 100 characters").optional(),
+  description: z.string().optional(),
+  image: z.string().url("Invalid image URL").optional()
+});
+
 export type AdminLoginInput = z.infer<typeof adminLoginSchema>;
 export type UpdateUserStatusInput = z.infer<typeof updateUserStatusSchema>;
 export type BanUserInput = z.infer<typeof banUserSchema>;
+export type CreateCategoryInput = z.infer<typeof createCategorySchema>;
+export type UpdateCategoryInput = z.infer<typeof updateCategorySchema>;

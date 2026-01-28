@@ -157,7 +157,7 @@ const getRatingStats = async (req: Request, res: Response, next: NextFunction) =
 const updateBookingStatus = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { bookingId } = req.params;
-    const result = await TutorService.updateBookingStatus(req.user!.id, bookingId, req.body);
+    const result = await TutorService.updateBookingStatus(req.user!.id, bookingId as string, req.body);
     
     res.status(200).json({
       success: true,

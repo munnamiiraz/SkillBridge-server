@@ -102,7 +102,7 @@ const getReviewableBookings = async (req: Request, res: Response, next: NextFunc
 const cancelBooking = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { bookingId } = req.params;
-    const result = await StudentService.cancelBooking(req.user!.id, bookingId);
+    const result = await StudentService.cancelBooking(req.user!.id, bookingId as string);
     
     res.status(200).json({
       success: true,

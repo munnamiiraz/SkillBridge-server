@@ -2,25 +2,44 @@ import { prisma } from "../../lib/prisma";
 import { updateProfileSchema, UpdateProfileInput, createReviewSchema, CreateReviewInput } from "./student.validation";
 import { createBookingSchema, CreateBookingInput } from "./booking.validation";
 import { randomUUID } from "crypto";
-
 import paginationSortingHelper from "../../helpers/paginationSortingHelper";
+import {
+  UserProfile,
+  CreateReviewResponse,
+  BookingWithTutor,
+  PaginatedResponse,
+  BookingPaginationOptions,
+  PaginationOptions
+} from "./student.interface";
 
-const updateProfile = async (userId: string, data: UpdateProfileInput) => {
+const updateProfile = async (userId: string, data: UpdateProfileInput): Promise<UserProfile> => {
   const validatedData = updateProfileSchema.parse(data);
+  
+  const updateData: any = {};
+  
+  if (validatedData.name !== undefined) {
+    updateData.name = validatedData.name;
+  }
+  if (validatedData.image !== undefined) {
+    updateData.image = validatedData.image;
+  }
+  if (validatedData.address !== undefined) {
+    updateData.address = validatedData.address;
+  }
   
   return await prisma.user.update({
     where: { id: userId },
-    data: validatedData
-  });
+    data: updateData
+  }) as UserProfile;
 };
 
-const getProfile = async (userId: string) => {
+const getProfile = async (userId: string): Promise<UserProfile | null> => {
   return await prisma.user.findUnique({
     where: { id: userId }
-  });
+  }) as UserProfile | null;
 };
 
-const createReview = async (studentId: string, data: CreateReviewInput) => {
+const createReview = async (studentId: string, data: CreateReviewInput): Promise<CreateReviewResponse> => {
   const validatedData = createReviewSchema.parse(data);
   
   // Check if booking exists and belongs to the student
@@ -55,15 +74,18 @@ const createReview = async (studentId: string, data: CreateReviewInput) => {
     throw new Error("Review already exists for this booking");
   }
   
+  const createData: any = {
+    bookingId: validatedData.bookingId,
+    studentId: studentId,
+    rating: validatedData.rating
+  };
+  
+  if (validatedData.comment !== undefined) {
+    createData.comment = validatedData.comment;
+  }
+  
   return await prisma.review.create({
-    data: {
-      id: randomUUID(),
-      bookingId: validatedData.bookingId,
-      studentId: studentId,
-      rating: validatedData.rating,
-      comment: validatedData.comment,
-      updatedAt: new Date()
-    },
+    data: createData,
     include: {
       booking: {
         include: {
@@ -80,10 +102,10 @@ const createReview = async (studentId: string, data: CreateReviewInput) => {
         }
       }
     }
-  });
+  }) as CreateReviewResponse;
 };
 
-const createBooking = async (studentId: string, data: CreateBookingInput) => {
+const createBooking = async (studentId: string, data: CreateBookingInput): Promise<BookingWithTutor> => {
   const validatedData = createBookingSchema.parse(data);
   
   // Check if tutor profile exists and is available
@@ -111,19 +133,22 @@ const createBooking = async (studentId: string, data: CreateBookingInput) => {
   // Calculate price based on duration and hourly rate
   const price = (validatedData.duration / 60) * tutorProfile.hourlyRate;
   
+  const createBookingData: any = {
+    studentId: studentId,
+    tutorProfileId: validatedData.tutorProfileId,
+    scheduledAt: scheduledDate,
+    duration: validatedData.duration,
+    subject: validatedData.subject,
+    price: price,
+    status: "PENDING"
+  };
+  
+  if (validatedData.notes !== undefined) {
+    createBookingData.notes = validatedData.notes;
+  }
+  
   return await prisma.booking.create({
-    data: {
-      id: randomUUID(),
-      studentId: studentId,
-      tutorProfileId: validatedData.tutorProfileId,
-      scheduledAt: scheduledDate,
-      duration: validatedData.duration,
-      subject: validatedData.subject,
-      notes: validatedData.notes,
-      price: price,
-      status: "PENDING",
-      updatedAt: new Date()
-    },
+    data: createBookingData,
     include: {
       tutor_profile: {
         include: {
@@ -137,10 +162,10 @@ const createBooking = async (studentId: string, data: CreateBookingInput) => {
         }
       }
     }
-  });
+  }) as BookingWithTutor;
 };
 
-const getBookings = async (studentId: string, options: { page: number; limit: number; status?: string }) => {
+const getBookings = async (studentId: string, options: BookingPaginationOptions): Promise<PaginatedResponse<BookingWithTutor>> => {
   const paginationHelper = paginationSortingHelper({
     page: options.page,
     limit: options.limit,
@@ -185,7 +210,7 @@ const getBookings = async (studentId: string, options: { page: number; limit: nu
   const totalPages = Math.ceil(total / paginationHelper.limit);
 
   return {
-    data: bookings,
+    data: bookings as BookingWithTutor[],
     meta: {
       total,
       page: paginationHelper.page,
@@ -195,7 +220,7 @@ const getBookings = async (studentId: string, options: { page: number; limit: nu
   };
 };
 
-const getReviewableBookings = async (studentId: string, options: { page: number; limit: number }) => {
+const getReviewableBookings = async (studentId: string, options: PaginationOptions): Promise<PaginatedResponse<BookingWithTutor>> => {
   const paginationHelper = paginationSortingHelper({
     page: options.page,
     limit: options.limit,
@@ -249,7 +274,7 @@ const getReviewableBookings = async (studentId: string, options: { page: number;
   const totalPages = Math.ceil(total / paginationHelper.limit);
 
   return {
-    data: bookings,
+    data: bookings as BookingWithTutor[],
     meta: {
       total,
       page: paginationHelper.page,
@@ -259,7 +284,7 @@ const getReviewableBookings = async (studentId: string, options: { page: number;
   };
 };
 
-const cancelBooking = async (studentId: string, bookingId: string) => {
+const cancelBooking = async (studentId: string, bookingId: string): Promise<BookingWithTutor> => {
   const booking = await prisma.booking.findFirst({
     where: {
       id: bookingId,
@@ -286,8 +311,21 @@ const cancelBooking = async (studentId: string, bookingId: string) => {
     data: {
       status: "CANCELLED",
       updatedAt: new Date()
+    },
+    include: {
+      tutor_profile: {
+        include: {
+          user: {
+            select: {
+              id: true,
+              name: true,
+              email: true
+            }
+          }
+        }
+      }
     }
-  });
+  }) as BookingWithTutor;
 };
 
 export const StudentService = { updateProfile, getProfile, createReview, createBooking, getBookings, getReviewableBookings, cancelBooking };

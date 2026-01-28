@@ -18,4 +18,10 @@ router.get("/bookings", auth(UserRole.ADMIN), AdminController.getAllBookings);
 // Platform statistics
 router.get("/stats", auth(UserRole.ADMIN), AdminController.getPlatformStats);
 
+// Category management
+router.get("/categories", auth(UserRole.ADMIN), AdminController.getCategories);
+router.post("/categories", auth(UserRole.ADMIN), AdminController.createCategory);
+router.patch("/categories/:categoryId", auth(UserRole.ADMIN), AdminController.updateCategory);
+router.delete("/categories/:categoryId", auth(UserRole.ADMIN), AdminController.deleteCategory);
+
 export const AdminRoutes = router;

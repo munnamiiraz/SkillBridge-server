@@ -1,55 +1,50 @@
 import { prisma } from "../../lib/prisma";
-import { adminLoginSchema, AdminLoginInput, updateUserStatusSchema, UpdateUserStatusInput } from "./admin.validation";
+import { adminLoginSchema, AdminLoginInput, updateUserStatusSchema, UpdateUserStatusInput, createCategorySchema, CreateCategoryInput, updateCategorySchema, UpdateCategoryInput } from "./admin.validation";
 import { auth } from "../../lib/auth";
 import paginationSortingHelper from "../../helpers/paginationSortingHelper";
+import { randomUUID } from "crypto";
+import {
+  AdminLoginResponse,
+  UserWithProfile,
+  UpdatedUser,
+  BookingWithDetails,
+  PlatformStats,
+  CategoryWithSubjects,
+  CategoryResponse,
+  PaginatedResponse,
+  UserPaginationOptions,
+  BookingPaginationOptions,
+  PaginationOptions
+} from "./admin.interface";
 
 const login = async (data: AdminLoginInput) => {
   const validatedData = adminLoginSchema.parse(data);
   
-  const user = await prisma.user.findUnique({
-    where: { email: validatedData.email }
-  });
-  
-  if (!user || user.role !== "ADMIN") {
-    throw new Error("Invalid credentials");
-  }
-  
-  const account = await prisma.account.findFirst({
-    where: { 
-      userId: user.id,
-      providerId: "credential"
-    }
-  });
-  
-  if (!account || !account.password) {
-    throw new Error("Invalid credentials");
-  }
-  
-  const isValidPassword = await auth.api.verifyPassword({
+  // Use better-auth to sign in the user
+  const signInResult = await auth.api.signInEmail({
     body: {
-      password: validatedData.password,
-      hash: account.password
+      email: validatedData.email,
+      password: validatedData.password
     }
   });
   
-  if (!isValidPassword) {
+  if (!signInResult.user) {
     throw new Error("Invalid credentials");
   }
   
-  const session = await auth.api.createSession({
-    body: {
-      userId: user.id
-    }
-  });
+  // Check if user is admin
+  if (signInResult.user.role !== "ADMIN") {
+    throw new Error("Access denied. Admin role required.");
+  }
   
   return {
     user: {
-      id: user.id,
-      name: user.name,
-      email: user.email,
-      role: user.role
+      id: signInResult.user.id,
+      name: signInResult.user.name,
+      email: signInResult.user.email,
+      role: signInResult.user.role
     },
-    session
+    token: signInResult.token
   };
 };
 
@@ -282,4 +277,166 @@ const getPlatformStats = async () => {
   };
 };
 
-export const AdminService = { login, getUsers, updateUserStatus, getAllBookings, getPlatformStats };
+const getCategories = async (options: { page: number; limit: number }) => {
+  const paginationHelper = paginationSortingHelper({
+    page: options.page,
+    limit: options.limit,
+    sortBy: "name",
+    sortOrder: "asc"
+  });
+
+  const [categories, total] = await Promise.all([
+    prisma.category.findMany({
+      include: {
+        subject: {
+          select: {
+            id: true,
+            name: true
+          }
+        },
+        _count: {
+          select: {
+            subject: true
+          }
+        }
+      },
+      skip: paginationHelper.skip,
+      take: paginationHelper.limit,
+      orderBy: {
+        name: paginationHelper.sortOrder as "asc" | "desc"
+      }
+    }),
+    prisma.category.count()
+  ]);
+
+  const totalPages = Math.ceil(total / paginationHelper.limit);
+
+  return {
+    data: categories,
+    meta: {
+      total,
+      page: paginationHelper.page,
+      limit: paginationHelper.limit,
+      totalPages
+    }
+  };
+};
+
+const createCategory = async (data: CreateCategoryInput) => {
+  const validatedData = createCategorySchema.parse(data);
+  
+  const existingCategory = await prisma.category.findUnique({
+    where: { name: validatedData.name }
+  });
+  
+  if (existingCategory) {
+    throw new Error("Category with this name already exists");
+  }
+  
+  const createData: any = {
+    name: validatedData.name
+  };
+  
+  if (validatedData.description !== undefined) {
+    createData.description = validatedData.description;
+  }
+  if (validatedData.image !== undefined) {
+    createData.image = validatedData.image;
+  }
+  
+  return await prisma.category.create({
+    data: createData,
+    include: {
+      subject: {
+        select: {
+          id: true,
+          name: true
+        }
+      },
+      _count: {
+        select: {
+          subject: true
+        }
+      }
+    }
+  });
+};
+
+const updateCategory = async (categoryId: string, data: UpdateCategoryInput) => {
+  const validatedData = updateCategorySchema.parse(data);
+  
+  const category = await prisma.category.findUnique({
+    where: { id: categoryId }
+  });
+  
+  if (!category) {
+    throw new Error("Category not found");
+  }
+  
+  if (validatedData.name && validatedData.name !== category.name) {
+    const existingCategory = await prisma.category.findUnique({
+      where: { name: validatedData.name }
+    });
+    
+    if (existingCategory) {
+      throw new Error("Category with this name already exists");
+    }
+  }
+  
+  const updateData: any = {};
+  
+  if (validatedData.name !== undefined) {
+    updateData.name = validatedData.name;
+  }
+  if (validatedData.description !== undefined) {
+    updateData.description = validatedData.description;
+  }
+  if (validatedData.image !== undefined) {
+    updateData.image = validatedData.image;
+  }
+  
+  return await prisma.category.update({
+    where: { id: categoryId },
+    data: updateData,
+    include: {
+      subject: {
+        select: {
+          id: true,
+          name: true
+        }
+      },
+      _count: {
+        select: {
+          subject: true
+        }
+      }
+    }
+  });
+};
+
+const deleteCategory = async (categoryId: string) => {
+  const category = await prisma.category.findUnique({
+    where: { id: categoryId },
+    include: {
+      _count: {
+        select: {
+          subject: true
+        }
+      }
+    }
+  });
+  
+  if (!category) {
+    throw new Error("Category not found");
+  }
+  
+  if (category._count.subject > 0) {
+    throw new Error("Cannot delete category with existing subjects");
+  }
+  
+  return await prisma.category.delete({
+    where: { id: categoryId }
+  });
+};
+
+export const AdminService = { login, getUsers, updateUserStatus, getAllBookings, getPlatformStats, getCategories, createCategory, updateCategory, deleteCategory };

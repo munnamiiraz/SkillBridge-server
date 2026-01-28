@@ -32,8 +32,8 @@ export const createAvailabilitySlotSchema = z.object({
 }).refine((data) => {
   const start = data.startTime.split(':').map(Number);
   const end = data.endTime.split(':').map(Number);
-  const startMinutes = start[0] * 60 + start[1];
-  const endMinutes = end[0] * 60 + end[1];
+  const startMinutes = start[0]! * 60 + start[1]!;
+  const endMinutes = end[0]! * 60 + end[1]!;
   return endMinutes > startMinutes;
 }, {
   message: "End time must be after start time"
@@ -47,8 +47,8 @@ export const updateAvailabilitySlotSchema = z.object({
   if (data.startTime && data.endTime) {
     const start = data.startTime.split(':').map(Number);
     const end = data.endTime.split(':').map(Number);
-    const startMinutes = start[0] * 60 + start[1];
-    const endMinutes = end[0] * 60 + end[1];
+    const startMinutes = start[0]! * 60 + start[1]!;
+    const endMinutes = end[0]! * 60 + end[1]!;
     return endMinutes > startMinutes;
   }
   return true;

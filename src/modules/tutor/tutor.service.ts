@@ -6,21 +6,56 @@ import paginationSortingHelper from "../../helpers/paginationSortingHelper";
 const createProfile = async (userId: string, data: CreateTutorProfileInput) => {
   const validatedData = createTutorProfileSchema.parse(data);
   
+  const createData: any = {
+    userId,
+    hourlyRate: validatedData.hourlyRate
+  };
+  
+  if (validatedData.bio !== undefined) {
+    createData.bio = validatedData.bio;
+  }
+  if (validatedData.headline !== undefined) {
+    createData.headline = validatedData.headline;
+  }
+  if (validatedData.experience !== undefined) {
+    createData.experience = validatedData.experience;
+  }
+  if (validatedData.education !== undefined) {
+    createData.education = validatedData.education;
+  }
+  
   return await prisma.tutor_profile.create({
-    data: {
-      ...validatedData,
-      userId,
-      id: crypto.randomUUID()
-    }
+    data: createData
   });
 };
 
 const updateProfile = async (userId: string, data: UpdateTutorProfileInput) => {
   const validatedData = updateTutorProfileSchema.parse(data);
   
+  const updateData: any = {};
+  
+  if (validatedData.bio !== undefined) {
+    updateData.bio = validatedData.bio;
+  }
+  if (validatedData.headline !== undefined) {
+    updateData.headline = validatedData.headline;
+  }
+  if (validatedData.hourlyRate !== undefined) {
+    updateData.hourlyRate = validatedData.hourlyRate;
+  }
+  if (validatedData.experience !== undefined) {
+    updateData.experience = validatedData.experience;
+  }
+  if (validatedData.education !== undefined) {
+    updateData.education = validatedData.education;
+  }
+  if (validatedData.isAvailable !== undefined) {
+    updateData.isAvailable = validatedData.isAvailable;
+  }
+  
   return await prisma.tutor_profile.update({
     where: { userId },
-    data: validatedData
+    data: updateData
   });
 };
 
@@ -51,8 +86,7 @@ const createAvailabilitySlot = async (userId: string, data: CreateAvailabilitySl
   const existingSlot = await prisma.availability_slot.findFirst({
     where: {
       tutorProfileId: tutorProfile.id,
-      dayOfWeek: validatedData.dayOfWeek,
-      isActive: true,
+      dayOfWeek: validatedData.dayOfWeek as any,
       OR: [
         {
           AND: [
@@ -82,11 +116,11 @@ const createAvailabilitySlot = async (userId: string, data: CreateAvailabilitySl
   
   return await prisma.availability_slot.create({
     data: {
-      id: randomUUID(),
       tutorProfileId: tutorProfile.id,
-      ...validatedData,
-      updatedAt: new Date()
-    }
+      dayOfWeek: validatedData.dayOfWeek,
+      startTime: validatedData.startTime,
+      endTime: validatedData.endTime
+    } as any
   });
 };
 
@@ -114,12 +148,18 @@ const updateAvailabilitySlot = async (userId: string, slotId: string, data: Upda
     throw new Error("Availability slot not found");
   }
   
+  const updateData: any = {};
+  
+  if (validatedData.startTime !== undefined) {
+    updateData.startTime = validatedData.startTime;
+  }
+  if (validatedData.endTime !== undefined) {
+    updateData.endTime = validatedData.endTime;
+  }
+  
   return await prisma.availability_slot.update({
     where: { id: slotId },
-    data: {
-      ...validatedData,
-      updatedAt: new Date()
-    }
+    data: updateData
   });
 };
 
@@ -196,7 +236,7 @@ const getTeachingSessions = async (userId: string, options: { page: number; limi
     prisma.booking.findMany({
       where: whereClause,
       include: {
-        student: {
+        user: {
           select: {
             id: true,
             name: true,
@@ -398,7 +438,7 @@ const updateBookingStatus = async (userId: string, bookingId: string, data: { st
       updatedAt: new Date()
     },
     include: {
-      student: {
+      user: {
         select: {
           id: true,
           name: true,
