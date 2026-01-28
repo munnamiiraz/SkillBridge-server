@@ -363,4 +363,50 @@ const getRatingStats = async (userId: string) => {
   };
 };
 
-export const TutorService = { createProfile, updateProfile, getProfile, createAvailabilitySlot, updateAvailabilitySlot, getAvailabilitySlots, deleteAvailabilitySlot, getTeachingSessions, getReviews, getRatingStats };
+const updateBookingStatus = async (userId: string, bookingId: string, data: { status: string }) => {
+  const tutorProfile = await prisma.tutor_profile.findUnique({
+    where: { userId }
+  });
+  
+  if (!tutorProfile) {
+    throw new Error("Tutor profile not found");
+  }
+
+  const booking = await prisma.booking.findFirst({
+    where: {
+      id: bookingId,
+      tutorProfileId: tutorProfile.id
+    }
+  });
+
+  if (!booking) {
+    throw new Error("Booking not found");
+  }
+
+  if (!['CONFIRMED', 'COMPLETED', 'CANCELLED'].includes(data.status)) {
+    throw new Error("Invalid status");
+  }
+
+  if (booking.status === "CANCELLED") {
+    throw new Error("Cannot update cancelled booking");
+  }
+
+  return await prisma.booking.update({
+    where: { id: bookingId },
+    data: {
+      status: data.status as any,
+      updatedAt: new Date()
+    },
+    include: {
+      student: {
+        select: {
+          id: true,
+          name: true,
+          email: true
+        }
+      }
+    }
+  });
+};
+
+export const TutorService = { createProfile, updateProfile, getProfile, createAvailabilitySlot, updateAvailabilitySlot, getAvailabilitySlots, deleteAvailabilitySlot, getTeachingSessions, getReviews, getRatingStats, updateBookingStatus };

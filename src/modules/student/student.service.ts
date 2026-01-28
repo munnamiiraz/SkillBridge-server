@@ -259,4 +259,35 @@ const getReviewableBookings = async (studentId: string, options: { page: number;
   };
 };
 
-export const StudentService = { updateProfile, getProfile, createReview, createBooking, getBookings, getReviewableBookings };
+const cancelBooking = async (studentId: string, bookingId: string) => {
+  const booking = await prisma.booking.findFirst({
+    where: {
+      id: bookingId,
+      studentId: studentId
+    }
+  });
+
+  if (!booking) {
+    throw new Error("Booking not found");
+  }
+
+  if (booking.status === "COMPLETED" || booking.status === "CANCELLED") {
+    throw new Error("Cannot cancel this booking");
+  }
+
+  // Check if booking is at least 24 hours away
+  const hoursUntilBooking = (booking.scheduledAt.getTime() - Date.now()) / (1000 * 60 * 60);
+  if (hoursUntilBooking < 24) {
+    throw new Error("Bookings can only be cancelled at least 24 hours in advance");
+  }
+
+  return await prisma.booking.update({
+    where: { id: bookingId },
+    data: {
+      status: "CANCELLED",
+      updatedAt: new Date()
+    }
+  });
+};
+
+export const StudentService = { updateProfile, getProfile, createReview, createBooking, getBookings, getReviewableBookings, cancelBooking };

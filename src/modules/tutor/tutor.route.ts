@@ -16,6 +16,7 @@ router.delete("/availability-slots/:slotId", auth(UserRole.TUTOR), TutorControll
 
 // Teaching sessions routes
 router.get("/sessions", auth(UserRole.TUTOR), TutorController.getTeachingSessions);
+router.patch("/sessions/:bookingId/status", auth(UserRole.TUTOR), TutorController.updateBookingStatus);
 
 // Reviews and ratings routes
 router.get("/reviews", auth(UserRole.TUTOR), TutorController.getReviews);

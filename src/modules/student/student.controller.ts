@@ -99,4 +99,19 @@ const getReviewableBookings = async (req: Request, res: Response, next: NextFunc
   }
 };
 
-export const StudentController = { updateProfile, getProfile, createReview, createBooking, getBookings, getReviewableBookings };
+const cancelBooking = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { bookingId } = req.params;
+    const result = await StudentService.cancelBooking(req.user!.id, bookingId);
+    
+    res.status(200).json({
+      success: true,
+      message: "Booking cancelled successfully",
+      data: result
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const StudentController = { updateProfile, getProfile, createReview, createBooking, getBookings, getReviewableBookings, cancelBooking };

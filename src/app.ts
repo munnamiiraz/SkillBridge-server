@@ -7,6 +7,7 @@ import { notFound } from "./middleware/notFound";
 import { StudentRoutes } from "./modules/student/student.route";
 import { TutorRoutes } from "./modules/tutor/tutor.route";
 import { PublicRoutes } from "./modules/public/public.route";
+import { AdminRoutes } from "./modules/admin/admin.route";
 
 const app: Application = express();
 
@@ -22,6 +23,7 @@ app.all("/api/auth/*splat", toNodeHandler(auth));
 app.use("/api/public", PublicRoutes);
 app.use("/api/student", StudentRoutes);
 app.use("/api/tutor", TutorRoutes);
+app.use("/api/admin", AdminRoutes);
 
 app.get("/", (req, res) => {
     res.send("Hello, World!");

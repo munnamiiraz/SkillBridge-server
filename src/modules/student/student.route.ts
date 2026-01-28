@@ -9,6 +9,7 @@ router.patch("/profile", auth(UserRole.STUDENT), StudentController.updateProfile
 router.post("/reviews", auth(UserRole.STUDENT), StudentController.createReview);
 router.post("/bookings", auth(UserRole.STUDENT), StudentController.createBooking);
 router.get("/bookings", auth(UserRole.STUDENT), StudentController.getBookings);
+router.patch("/bookings/:bookingId/cancel", auth(UserRole.STUDENT), StudentController.cancelBooking);
 router.get("/reviewable-bookings", auth(UserRole.STUDENT), StudentController.getReviewableBookings);
 
 // Test route to check authentication

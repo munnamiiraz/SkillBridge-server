@@ -154,4 +154,19 @@ const getRatingStats = async (req: Request, res: Response, next: NextFunction) =
   }
 };
 
-export const TutorController = { createProfile, updateProfile, getProfile, createAvailabilitySlot, updateAvailabilitySlot, getAvailabilitySlots, deleteAvailabilitySlot, getTeachingSessions, getReviews, getRatingStats };
+const updateBookingStatus = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { bookingId } = req.params;
+    const result = await TutorService.updateBookingStatus(req.user!.id, bookingId, req.body);
+    
+    res.status(200).json({
+      success: true,
+      message: "Booking status updated successfully",
+      data: result
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const TutorController = { createProfile, updateProfile, getProfile, createAvailabilitySlot, updateAvailabilitySlot, getAvailabilitySlots, deleteAvailabilitySlot, getTeachingSessions, getReviews, getRatingStats, updateBookingStatus };
