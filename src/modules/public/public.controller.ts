@@ -29,6 +29,7 @@ export class PublicController {
         ...(maxRating && { maxRating: Number(maxRating) }),
         ...(minPrice && { minPrice: Number(minPrice) }),
         ...(maxPrice && { maxPrice: Number(maxPrice) }),
+        ...(req.query.searchTerm && { searchTerm: req.query.searchTerm as string }),
       };
 
       const result = await PublicService.searchTutors(filters, paginationOptions);

@@ -11,6 +11,7 @@ router.patch("/profile", auth(UserRole.TUTOR), TutorController.updateProfile);
 // Availability slots routes
 router.post("/availability-slots", auth(UserRole.TUTOR), TutorController.createAvailabilitySlot);
 router.get("/availability-slots", auth(UserRole.TUTOR), TutorController.getAvailabilitySlots);
+router.put("/availability-slots", auth(UserRole.TUTOR), TutorController.manageAvailability);
 router.patch("/availability-slots/:slotId", auth(UserRole.TUTOR), TutorController.updateAvailabilitySlot);
 router.delete("/availability-slots/:slotId", auth(UserRole.TUTOR), TutorController.deleteAvailabilitySlot);
 

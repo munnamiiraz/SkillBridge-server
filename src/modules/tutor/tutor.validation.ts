@@ -56,6 +56,12 @@ export const updateAvailabilitySlotSchema = z.object({
   message: "End time must be after start time"
 });
 
+export const manageAvailabilitySchema = z.object({
+  slots: z.array(createAvailabilitySlotSchema)
+});
+
+export type ManageAvailabilityInput = z.infer<typeof manageAvailabilitySchema>;
+
 export type CreateAvailabilitySlotInput = z.infer<typeof createAvailabilitySlotSchema>;
 export type UpdateAvailabilitySlotInput = z.infer<typeof updateAvailabilitySlotSchema>;
 

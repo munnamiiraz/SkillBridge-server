@@ -1,7 +1,27 @@
 import { prisma } from "../../lib/prisma";
-import { createTutorProfileSchema, updateTutorProfileSchema, CreateTutorProfileInput, UpdateTutorProfileInput, createAvailabilitySlotSchema, updateAvailabilitySlotSchema, CreateAvailabilitySlotInput, UpdateAvailabilitySlotInput } from "./tutor.validation";
+import { createTutorProfileSchema, updateTutorProfileSchema, CreateTutorProfileInput, UpdateTutorProfileInput, createAvailabilitySlotSchema, updateAvailabilitySlotSchema, CreateAvailabilitySlotInput, UpdateAvailabilitySlotInput, manageAvailabilitySchema, ManageAvailabilityInput } from "./tutor.validation";
 import { randomUUID } from "crypto";
 import paginationSortingHelper from "../../helpers/paginationSortingHelper";
+
+const dayOfWeekMap: Record<string, number> = {
+  "MONDAY": 1,
+  "TUESDAY": 2,
+  "WEDNESDAY": 3,
+  "THURSDAY": 4,
+  "FRIDAY": 5,
+  "SATURDAY": 6,
+  "SUNDAY": 7
+};
+
+const reverseDayOfWeekMap: Record<number, string> = {
+  1: "MONDAY",
+  2: "TUESDAY",
+  3: "WEDNESDAY",
+  4: "THURSDAY",
+  5: "FRIDAY",
+  6: "SATURDAY",
+  7: "SUNDAY"
+};
 
 const createProfile = async (userId: string, data: CreateTutorProfileInput) => {
   const validatedData = createTutorProfileSchema.parse(data);
@@ -83,10 +103,12 @@ const createAvailabilitySlot = async (userId: string, data: CreateAvailabilitySl
   }
   
   // Check for overlapping slots on the same day
+  const dayOfWeekInt = dayOfWeekMap[validatedData.dayOfWeek];
+  
   const existingSlot = await prisma.availability_slot.findFirst({
     where: {
       tutorProfileId: tutorProfile.id,
-      dayOfWeek: validatedData.dayOfWeek as any,
+      dayOfWeek: dayOfWeekInt,
       OR: [
         {
           AND: [
@@ -114,14 +136,21 @@ const createAvailabilitySlot = async (userId: string, data: CreateAvailabilitySl
     throw new Error("Time slot overlaps with existing availability");
   }
   
-  return await prisma.availability_slot.create({
+  const slot = await prisma.availability_slot.create({
     data: {
+      id: randomUUID(),
       tutorProfileId: tutorProfile.id,
-      dayOfWeek: validatedData.dayOfWeek,
+      dayOfWeek: dayOfWeekInt,
       startTime: validatedData.startTime,
-      endTime: validatedData.endTime
-    } as any
+      endTime: validatedData.endTime,
+      isRecurring: true
+    }
   });
+
+  return {
+    ...slot,
+    dayOfWeek: reverseDayOfWeekMap[slot.dayOfWeek] || "UNKNOWN"
+  };
 };
 
 const updateAvailabilitySlot = async (userId: string, slotId: string, data: UpdateAvailabilitySlotInput) => {
@@ -172,7 +201,7 @@ const getAvailabilitySlots = async (userId: string) => {
     throw new Error("Tutor profile not found");
   }
   
-  return await prisma.availability_slot.findMany({
+  const slots = await prisma.availability_slot.findMany({
     where: {
       tutorProfileId: tutorProfile.id
     },
@@ -181,6 +210,11 @@ const getAvailabilitySlots = async (userId: string) => {
       { startTime: 'asc' }
     ]
   });
+
+  return slots.map(slot => ({
+    ...slot,
+    dayOfWeek: reverseDayOfWeekMap[slot.dayOfWeek] || "UNKNOWN"
+  }));
 };
 
 const deleteAvailabilitySlot = async (userId: string, slotId: string) => {
@@ -449,4 +483,58 @@ const updateBookingStatus = async (userId: string, bookingId: string, data: { st
   });
 };
 
-export const TutorService = { createProfile, updateProfile, getProfile, createAvailabilitySlot, updateAvailabilitySlot, getAvailabilitySlots, deleteAvailabilitySlot, getTeachingSessions, getReviews, getRatingStats, updateBookingStatus };
+const manageAvailability = async (userId: string, data: ManageAvailabilityInput) => {
+  const validatedData = manageAvailabilitySchema.parse(data);
+  
+  // Get tutor profile
+  const tutorProfile = await prisma.tutor_profile.findUnique({
+    where: { userId }
+  });
+  
+  if (!tutorProfile) {
+    throw new Error("Tutor profile not found");
+  }
+
+  // Use transaction to ensure atomic update
+  return await prisma.$transaction(async (tx) => {
+    // Delete existing slots
+    await tx.availability_slot.deleteMany({
+      where: {
+        tutorProfileId: tutorProfile.id
+      }
+    });
+
+    // Create new slots
+    if (validatedData.slots.length > 0) {
+      await tx.availability_slot.createMany({
+        data: validatedData.slots.map(slot => ({
+          id: randomUUID(), 
+          tutorProfileId: tutorProfile.id,
+          dayOfWeek: dayOfWeekMap[slot.dayOfWeek],
+          startTime: slot.startTime,
+          endTime: slot.endTime,
+          isRecurring: true, 
+          updatedAt: new Date()
+        }))
+      });
+    }
+
+    // Return the new slots
+    const slots = await tx.availability_slot.findMany({
+      where: {
+        tutorProfileId: tutorProfile.id
+      },
+      orderBy: [
+        { dayOfWeek: 'asc' },
+        { startTime: 'asc' }
+      ]
+    });
+
+    return slots.map(slot => ({
+      ...slot,
+      dayOfWeek: reverseDayOfWeekMap[slot.dayOfWeek] || "UNKNOWN"
+    }));
+  });
+};
+
+export const TutorService = { createProfile, updateProfile, getProfile, createAvailabilitySlot, updateAvailabilitySlot, getAvailabilitySlots, deleteAvailabilitySlot, manageAvailability, getTeachingSessions, getReviews, getRatingStats, updateBookingStatus };

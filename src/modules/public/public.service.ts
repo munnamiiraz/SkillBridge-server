@@ -7,6 +7,7 @@ interface SearchFilters {
   maxRating?: number;
   minPrice?: number;
   maxPrice?: number;
+  searchTerm?: string;
 }
 
 interface PaginationOptions {
@@ -78,6 +79,37 @@ export class PublicService {
         ...whereClause.hourlyRate,
         lte: filters.maxPrice
       };
+    }
+
+    if (filters.searchTerm) {
+      whereClause.OR = [
+        {
+          user: {
+            name: {
+              contains: filters.searchTerm,
+              mode: "insensitive"
+            }
+          }
+        },
+        {
+          tutor_subject: {
+            some: {
+              subject: {
+                name: {
+                  contains: filters.searchTerm,
+                  mode: "insensitive"
+                }
+              }
+            }
+          }
+        },
+        {
+          bio: {
+            contains: filters.searchTerm,
+            mode: "insensitive"
+          }
+        }
+      ];
     }
 
     const [tutors, total] = await Promise.all([
