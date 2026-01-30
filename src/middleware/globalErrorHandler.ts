@@ -14,7 +14,8 @@ function errorHandler(
     // PrismaClientValidationError
     if (err instanceof Prisma.PrismaClientValidationError) {
         statusCode = 400;
-        errorMessage = "You provide incorrect field type or missing fields!"
+        // Include the actual error message from Prisma to debug which field is wrong
+        errorMessage = "Validation Error: " + err.message.replace(/\n/g, ' '); 
     }
     // PrismaClientKnownRequestError
     else if (err instanceof Prisma.PrismaClientKnownRequestError) {

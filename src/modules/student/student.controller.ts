@@ -3,8 +3,8 @@ import { StudentService } from "./student.service";
 
 const updateProfile = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const { name, image, address } = req.body;
-    const result = await StudentService.updateProfile(req.user!.id, { name, image, address });
+    const { name, image, address, phone } = req.body;
+    const result = await StudentService.updateProfile(req.user!.id, { name, image, address, phone });
     
     res.status(200).json({
       success: true,
@@ -47,15 +47,45 @@ const createReview = async (req: Request, res: Response, next: NextFunction) => 
 
 const createBooking = async (req: Request, res: Response, next: NextFunction) => {
   try {
+    console.log('Booking request body:', req.body);
+    console.log('User from auth:', req.user);
+    
     const { tutorProfileId, scheduledAt, duration, subject, notes } = req.body;
-    const result = await StudentService.createBooking(req.user!.id, { tutorProfileId, scheduledAt, duration, subject, notes });
+    
+    if (!req.user) {
+      return res.status(401).json({
+        success: false,
+        message: "User not authenticated"
+      });
+    }
+    
+    const result = await StudentService.createBooking(req.user.id, { tutorProfileId, scheduledAt, duration, subject, notes });
     
     res.status(201).json({
       success: true,
       message: "Booking created successfully",
       data: result
     });
-  } catch (error) {
+  } catch (error: any) {
+    console.error('Booking creation error:', error);
+    
+    // Handle validation errors
+    if (error.name === 'ZodError') {
+      return res.status(400).json({
+        success: false,
+        message: "Validation error",
+        errors: error.errors
+      });
+    }
+    
+    // Handle custom errors
+    if (error.message) {
+      return res.status(400).json({
+        success: false,
+        message: error.message
+      });
+    }
+    
     next(error);
   }
 };

@@ -4,8 +4,8 @@ import { TutorController } from "./tutor.controller";
 
 const router = Router();
 
-router.post("/profile", auth(UserRole.TUTOR), TutorController.createProfile);
-router.get("/profile", auth(UserRole.TUTOR), TutorController.getProfile);
+router.post("/profile", auth(), TutorController.createProfile);
+router.get("/profile", auth(), TutorController.getProfile);
 router.patch("/profile", auth(UserRole.TUTOR), TutorController.updateProfile);
 
 // Availability slots routes

@@ -3,7 +3,32 @@ import { TutorService } from "./tutor.service";
 
 const createProfile = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const result = await TutorService.createProfile(req.user!.id, req.body);
+    console.log('Creating profile for user:', req.user);
+    
+    if (!req.user) {
+      return res.status(401).json({
+        success: false,
+        message: "User not authenticated"
+      });
+    }
+    
+    // Direct check without triggering auto-creation
+    const { prisma } = await import("../../lib/prisma");
+    const existingProfile = await prisma.tutor_profile.findUnique({
+      where: { userId: req.user.id }
+    });
+    
+    if (existingProfile) {
+      // Profile exists, return it instead of error
+      const fullProfile = await TutorService.getProfile(req.user.id);
+      return res.status(200).json({
+        success: true,
+        message: "Tutor profile already exists",
+        data: fullProfile
+      });
+    }
+    
+    const result = await TutorService.createProfile(req.user.id, req.body);
     
     res.status(201).json({
       success: true,
@@ -11,6 +36,7 @@ const createProfile = async (req: Request, res: Response, next: NextFunction) =>
       data: result
     });
   } catch (error) {
+    console.error('Error creating profile:', error);
     next(error);
   }
 };
@@ -31,7 +57,25 @@ const updateProfile = async (req: Request, res: Response, next: NextFunction) =>
 
 const getProfile = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const result = await TutorService.getProfile(req.user!.id);
+    // console.log('User from request:', req.user);
+    
+    if (!req.user) {
+      return res.status(401).json({
+        success: false,
+        message: "User not authenticated"
+      });
+      console.log('User not authenticated');
+    }
+    
+    const result = await TutorService.getProfile(req.user.id);
+    
+    if (!result) {
+      return res.status(404).json({
+        success: false,
+        message: "Tutor profile not found. Please create a profile first.",
+        data: null
+      });
+    }
     
     res.status(200).json({
       success: true,
@@ -39,6 +83,7 @@ const getProfile = async (req: Request, res: Response, next: NextFunction) => {
       data: result
     });
   } catch (error) {
+    console.error('Error in getProfile:', error);
     next(error);
   }
 };
@@ -122,11 +167,24 @@ const getTeachingSessions = async (req: Request, res: Response, next: NextFuncti
 
 const getReviews = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const { page = 1, limit = 10, rating } = req.query;
+    const { page, limit, rating } = req.query;
+
+    const pageNumber = Number(page) > 0 ? Number(page) : 1;
+    const limitNumber = Number(limit) > 0 ? Number(limit) : 10;
+    
+    // Parse rating safely - if invalid number, treat as undefined
+    let ratingNumber: number | undefined = undefined;
+    if (rating) {
+        const parsed = Number(rating);
+        if (!isNaN(parsed) && parsed >= 1 && parsed <= 5) {
+            ratingNumber = parsed;
+        }
+    }
+
     const result = await TutorService.getReviews(req.user!.id, {
-      page: Number(page),
-      limit: Number(limit),
-      ...(rating && { rating: Number(rating) })
+      page: pageNumber,
+      limit: limitNumber,
+      ...(ratingNumber !== undefined && { rating: ratingNumber })
     });
     
     res.status(200).json({
@@ -136,6 +194,7 @@ const getReviews = async (req: Request, res: Response, next: NextFunction) => {
       meta: result.meta
     });
   } catch (error) {
+    console.error("Error in getReviews controller:", error);
     next(error);
   }
 };

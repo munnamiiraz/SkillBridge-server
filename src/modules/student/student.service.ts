@@ -26,6 +26,9 @@ const updateProfile = async (userId: string, data: UpdateProfileInput): Promise<
   if (validatedData.address !== undefined) {
     updateData.address = validatedData.address;
   }
+  if (validatedData.phone !== undefined) {
+    updateData.phone = validatedData.phone;
+  }
   
   return await prisma.user.update({
     where: { id: userId },
@@ -54,14 +57,23 @@ const createReview = async (studentId: string, data: CreateReviewInput): Promise
     throw new Error("Booking not found or doesn't belong to you");
   }
   
-  // Check if booking is completed
-  if (booking.status !== "COMPLETED") {
-    throw new Error("You can only review completed sessions");
-  }
-  
   // Check if session time has passed
   const sessionEndTime = new Date(booking.scheduledAt.getTime() + booking.duration * 60000);
-  if (sessionEndTime > new Date()) {
+  const now = new Date();
+
+  if (booking.status === "COMPLETED") {
+    // Already completed, proceed to review
+  } else if (booking.status === "CONFIRMED" && sessionEndTime < now) {
+    // Session passed but not marked completed - allow review and auto-complete
+    await prisma.booking.update({
+      where: { id: booking.id },
+      data: { status: "COMPLETED", updatedAt: new Date() }
+    });
+  } else {
+    throw new Error("You can only review completed sessions");
+  }
+
+  if (sessionEndTime > now) {
     throw new Error("You can only review after the session has ended");
   }
   
@@ -106,63 +118,125 @@ const createReview = async (studentId: string, data: CreateReviewInput): Promise
 };
 
 const createBooking = async (studentId: string, data: CreateBookingInput): Promise<BookingWithTutor> => {
-  const validatedData = createBookingSchema.parse(data);
-  
-  // Check if tutor profile exists and is available
-  const tutorProfile = await prisma.tutor_profile.findUnique({
-    where: { id: validatedData.tutorProfileId },
-    include: {
-      user: {
-        select: {
-          status: true
-        }
-      }
-    }
-  });
-  
-  if (!tutorProfile || !tutorProfile.isAvailable || tutorProfile.user.status !== "ACTIVE") {
-    throw new Error("Tutor is not available for booking");
-  }
-  
-  // Check if the scheduled time is in the future
-  const scheduledDate = new Date(validatedData.scheduledAt);
-  if (scheduledDate <= new Date()) {
-    throw new Error("Booking time must be in the future");
-  }
-  
-  // Calculate price based on duration and hourly rate
-  const price = (validatedData.duration / 60) * tutorProfile.hourlyRate;
-  
-  const createBookingData: any = {
-    studentId: studentId,
-    tutorProfileId: validatedData.tutorProfileId,
-    scheduledAt: scheduledDate,
-    duration: validatedData.duration,
-    subject: validatedData.subject,
-    price: price,
-    status: "PENDING"
-  };
-  
-  if (validatedData.notes !== undefined) {
-    createBookingData.notes = validatedData.notes;
-  }
-  
-  return await prisma.booking.create({
-    data: createBookingData,
-    include: {
-      tutor_profile: {
-        include: {
-          user: {
-            select: {
-              id: true,
-              name: true,
-              email: true
-            }
+  try {
+    console.log('Creating booking with data:', data);
+    console.log('Student ID:', studentId);
+    
+    const validatedData = createBookingSchema.parse(data);
+    console.log('Validated data:', validatedData);
+    
+    // Check if tutor profile exists and is available
+    const tutorProfile = await prisma.tutor_profile.findUnique({
+      where: { id: validatedData.tutorProfileId },
+      include: {
+        user: {
+          select: {
+            status: true
           }
         }
       }
+    });
+    
+    console.log('Tutor profile found:', tutorProfile);
+    
+    if (!tutorProfile || !tutorProfile.isAvailable || tutorProfile.user.status !== "ACTIVE") {
+      throw new Error("Tutor is not available for booking");
     }
-  }) as BookingWithTutor;
+    
+    // Check if the scheduled time is in the future
+    const scheduledDate = new Date(validatedData.scheduledAt);
+    if (scheduledDate <= new Date()) {
+      throw new Error("Booking time must be in the future");
+    }
+    
+    // Check for existing bookings at the same time
+    const existingBooking = await prisma.booking.findFirst({
+      where: {
+        tutorProfileId: validatedData.tutorProfileId,
+        scheduledAt: scheduledDate,
+        status: {
+          not: 'CANCELLED'
+        }
+      }
+    });
+    
+    if (existingBooking) {
+      throw new Error("This time slot is already booked");
+    }
+    
+    // Find the availability slot for this booking
+    const dayOfWeek = scheduledDate.getDay() === 0 ? 7 : scheduledDate.getDay();
+    const timeString = scheduledDate.toTimeString().substring(0, 5);
+    
+    const availabilitySlot = await prisma.availability_slot.findFirst({
+      where: {
+        tutorProfileId: validatedData.tutorProfileId,
+        dayOfWeek: dayOfWeek,
+        startTime: timeString,
+        isBooked: false
+      }
+    });
+    
+    if (!availabilitySlot) {
+      throw new Error("This time slot is not available");
+    }
+    
+    // Calculate price based on duration and hourly rate
+    const price = (validatedData.duration / 60) * tutorProfile.hourlyRate;
+    
+    const createBookingData: any = {
+      id: randomUUID(),
+      studentId: studentId,
+      tutorProfileId: validatedData.tutorProfileId,
+      availabilitySlotId: availabilitySlot.id,
+      scheduledAt: scheduledDate,
+      duration: validatedData.duration,
+      subject: validatedData.subject,
+      price: price,
+      status: "PENDING",
+      createdAt: new Date(),
+      updatedAt: new Date()
+    };
+    
+    if (validatedData.notes !== undefined) {
+      createBookingData.notes = validatedData.notes;
+    }
+    
+    console.log('Creating booking with data:', createBookingData);
+    
+    // Create booking and mark slot as booked in a transaction
+    const result = await prisma.$transaction(async (tx) => {
+      // Mark the availability slot as booked
+      await tx.availability_slot.update({
+        where: { id: availabilitySlot.id },
+        data: { isBooked: true }
+      });
+      
+      // Create the booking
+      return await tx.booking.create({
+        data: createBookingData,
+        include: {
+          tutor_profile: {
+            include: {
+              user: {
+                select: {
+                  id: true,
+                  name: true,
+                  email: true
+                }
+              }
+            }
+          }
+        }
+      });
+    });
+    
+    console.log('Booking created successfully:', result);
+    return result as BookingWithTutor;
+  } catch (error) {
+    console.error('Error in createBooking service:', error);
+    throw error;
+  }
 };
 
 const getBookings = async (studentId: string, options: BookingPaginationOptions): Promise<PaginatedResponse<BookingWithTutor>> => {
@@ -289,6 +363,9 @@ const cancelBooking = async (studentId: string, bookingId: string): Promise<Book
     where: {
       id: bookingId,
       studentId: studentId
+    },
+    include: {
+      availability_slot: true
     }
   });
 
@@ -306,25 +383,37 @@ const cancelBooking = async (studentId: string, bookingId: string): Promise<Book
     throw new Error("Bookings can only be cancelled at least 24 hours in advance");
   }
 
-  return await prisma.booking.update({
-    where: { id: bookingId },
-    data: {
-      status: "CANCELLED",
-      updatedAt: new Date()
-    },
-    include: {
-      tutor_profile: {
-        include: {
-          user: {
-            select: {
-              id: true,
-              name: true,
-              email: true
+  // Cancel booking and free up the slot in a transaction
+  return await prisma.$transaction(async (tx) => {
+    // Free up the availability slot if it exists
+    if (booking.availabilitySlotId) {
+      await tx.availability_slot.update({
+        where: { id: booking.availabilitySlotId },
+        data: { isBooked: false }
+      });
+    }
+    
+    // Update booking status
+    return await tx.booking.update({
+      where: { id: bookingId },
+      data: {
+        status: "CANCELLED",
+        updatedAt: new Date()
+      },
+      include: {
+        tutor_profile: {
+          include: {
+            user: {
+              select: {
+                id: true,
+                name: true,
+                email: true
+              }
             }
           }
         }
       }
-    }
+    });
   }) as BookingWithTutor;
 };
 

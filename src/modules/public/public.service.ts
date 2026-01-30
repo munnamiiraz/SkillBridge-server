@@ -179,7 +179,18 @@ export class PublicService {
             }
           }
         },
-        availability_slot: true
+        availability_slot: true,
+        booking: {
+          where: {
+            status: {
+              not: 'CANCELLED'
+            }
+          },
+          select: {
+            scheduledAt: true,
+            status: true
+          }
+        }
       }
     });
     

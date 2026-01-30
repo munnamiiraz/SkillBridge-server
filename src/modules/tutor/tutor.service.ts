@@ -44,9 +44,16 @@ const createProfile = async (userId: string, data: CreateTutorProfileInput) => {
     createData.education = validatedData.education;
   }
   
-  return await prisma.tutor_profile.create({
-    data: createData
+  const profile = await prisma.tutor_profile.create({
+    data: createData,
+    include: {
+      user: {
+        select: { id: true, name: true, email: true, image: true }
+      }
+    }
   });
+  
+  return profile;
 };
 
 const updateProfile = async (userId: string, data: UpdateTutorProfileInput) => {
@@ -80,14 +87,77 @@ const updateProfile = async (userId: string, data: UpdateTutorProfileInput) => {
 };
 
 const getProfile = async (userId: string) => {
-  return await prisma.tutor_profile.findUnique({
+  const profile = await prisma.tutor_profile.findUnique({
     where: { userId },
     include: {
       user: {
-        select: { id: true, name: true, email: true, image: true }
-      }
+        select: { id: true, name: true, email: true, image: true, role: true }
+      },
+      tutor_subject: {
+        include: {
+          subject: {
+            include: {
+              category: true
+            }
+          }
+        }
+      },
+      availability_slot: true
     }
   });
+
+  if (!profile) {
+    console.log(`[TutorService] Profile not found for userId: ${userId}. Checking user role...`);
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { id: true, name: true, email: true, image: true, role: true }
+    });
+
+    console.log(`[TutorService] User found: ${user ? 'Yes' : 'No'}, Role: ${user?.role}`);
+
+    if (user && user.role === 'TUTOR') {
+      console.log(`[TutorService] User is TUTOR. Auto-creating profile...`);
+      try {
+        const newProfile = await prisma.tutor_profile.create({
+          data: {
+            id: randomUUID(),
+            userId,
+            hourlyRate: 25, // Valid default rate (> 0)
+            bio: "Welcome to my profile! I am a passionate tutor ready to help you learn.",
+            headline: "SkillBridge Tutor",
+            experience: 0,
+            education: "",
+            isAvailable: true
+          },
+          include: {
+            user: {
+              select: { id: true, name: true, email: true, image: true, role: true }
+            },
+            tutor_subject: {
+              include: {
+                subject: {
+                  include: {
+                    category: true
+                  }
+                }
+              }
+            },
+            availability_slot: true
+          }
+        });
+        console.log(`[TutorService] Auto-created profile successfully: ${newProfile.id}`);
+        return newProfile;
+      } catch (err) {
+        console.error(`[TutorService] Failed to auto-create profile:`, err);
+        // Fallback: return null so controller handles it (though likely 500 if DB error)
+        return null; 
+      }
+    } else {
+      console.log(`[TutorService] User is not TUTOR or not found. Skipping auto-creation.`);
+    }
+  }
+
+  return profile;
 };
 
 const createAvailabilitySlot = async (userId: string, data: CreateAvailabilitySlotInput) => {

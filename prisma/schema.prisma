@@ -20,7 +20,7 @@ model account {
   scope                 String?
   password              String?
   createdAt             DateTime  @default(now())
-  updatedAt             DateTime
+  updatedAt             DateTime  @updatedAt
   user                  user      @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
@@ -32,36 +32,44 @@ model availability_slot {
   endTime        String
   isRecurring    Boolean       @default(true)
   specificDate   DateTime?
+  isBooked       Boolean       @default(false)
   createdAt      DateTime      @default(now())
-  updatedAt      DateTime
+  updatedAt      DateTime      @updatedAt
   tutor_profile  tutor_profile @relation(fields: [tutorProfileId], references: [id], onDelete: Cascade)
+  booking        booking[]
 }
 
 model booking {
-  id             String        @id
-  studentId      String
-  tutorProfileId String
-  scheduledAt    DateTime
-  duration       Int           @default(60)
-  status         BookingStatus @default(PENDING)
-  subject        String?
-  notes          String?
-  meetingLink    String?
-  price          Float
-  createdAt      DateTime      @default(now())
-  updatedAt      DateTime
-  user           user          @relation(fields: [studentId], references: [id], onDelete: Cascade)
-  tutor_profile  tutor_profile @relation(fields: [tutorProfileId], references: [id], onDelete: Cascade)
-  review         review?
+  id                 String             @id
+  studentId          String
+  tutorProfileId     String
+  availabilitySlotId String?
+  scheduledAt        DateTime
+  duration           Int                @default(60)
+  status             BookingStatus      @default(PENDING)
+  subject            String?
+  notes              String?
+  meetingLink        String?
+  price              Float
+  createdAt          DateTime           @default(now())
+  updatedAt          DateTime           @updatedAt
+  user               user               @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  tutor_profile      tutor_profile      @relation(fields: [tutorProfileId], references: [id], onDelete: Cascade)
+  availability_slot  availability_slot? @relation(fields: [availabilitySlotId], references: [id], onDelete: SetNull)
+  review             review?
 }
 
 model category {
-  id          String    @id
-  name        String    
+  id          String    @id @default(uuid())
+  name        String    @unique
+  slug        String    @unique
   description String?
   image       String?
+  icon        String    @default("💻")
+  color       String    @default("indigo")
+  status      String    @default("active")
   createdAt   DateTime  @default(now())
-  updatedAt   DateTime
+  updatedAt   DateTime  @updatedAt
   subject     subject[]
 }
 
@@ -72,7 +80,7 @@ model review {
   rating    Int
   comment   String?
   createdAt DateTime @default(now())
-  updatedAt DateTime
+  updatedAt DateTime @updatedAt
   booking   booking  @relation(fields: [bookingId], references: [id], onDelete: Cascade)
   user      user     @relation(fields: [studentId], references: [id], onDelete: Cascade)
 }
@@ -85,7 +93,7 @@ model session {
   userAgent String?
   userId    String
   createdAt DateTime @default(now())
-  updatedAt DateTime
+  updatedAt DateTime @updatedAt
   user      user     @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
@@ -94,7 +102,7 @@ model subject {
   name          String
   categoryId    String
   createdAt     DateTime        @default(now())
-  updatedAt     DateTime
+  updatedAt     DateTime        @updatedAt
   category      category        @relation(fields: [categoryId], references: [id], onDelete: Cascade)
   tutor_subject tutor_subject[]
 
@@ -116,7 +124,7 @@ model tutor_profile {
   totalSessions     Int                 @default(0)
   isFeatured        Boolean             @default(false)
   createdAt         DateTime            @default(now())
-  updatedAt         DateTime
+  updatedAt         DateTime            @updatedAt
   availability_slot availability_slot[]
   booking           booking[]
   user              user                @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -141,11 +149,12 @@ model user {
   emailVerified Boolean        @default(false)
   address       String?
   image         String?
+  coverImage    String?
   role          Role           @default(STUDENT)
   status        UserStatus     @default(ACTIVE)
   banReason     String?
   createdAt     DateTime       @default(now())
-  updatedAt     DateTime
+  updatedAt     DateTime       @updatedAt
   account       account[]
   booking       booking[]
   review        review[]
@@ -159,7 +168,7 @@ model verification {
   value      String
   expiresAt  DateTime
   createdAt  DateTime @default(now())
-  updatedAt  DateTime
+  updatedAt  DateTime @updatedAt
 }
 
 enum BookingStatus {

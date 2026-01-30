@@ -2,6 +2,7 @@ import { PrismaClient, Prisma } from "../src/generated/prisma/client";
 import "dotenv/config";
 import { hash } from "bcryptjs";
 import { PrismaPg } from "@prisma/adapter-pg";
+import { log } from "node:console";
 
 const adapter = new PrismaPg({
   connectionString: process.env.DATABASE_URL,
@@ -108,7 +109,7 @@ async function main() {
   console.log("✅ All existing data deleted");
 
   const hashedPassword = await hash("password123", 10);
-
+  
   // Create Categories
   console.log("📚 Creating categories...");
   const categories = [

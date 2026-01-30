@@ -25,13 +25,19 @@ export const banUserSchema = z.object({
 export const createCategorySchema = z.object({
   name: z.string().min(1, "Category name is required").max(100, "Category name must be less than 100 characters"),
   description: z.string().optional(),
-  image: z.string().url("Invalid image URL").optional()
+  image: z.string().url("Invalid image URL").optional(),
+  icon: z.string().optional(),
+  color: z.string().optional(),
+  status: z.enum(["ACTIVE", "INACTIVE"]).optional()
 });
 
 export const updateCategorySchema = z.object({
   name: z.string().min(1, "Category name is required").max(100, "Category name must be less than 100 characters").optional(),
   description: z.string().optional(),
-  image: z.string().url("Invalid image URL").optional()
+  image: z.string().url("Invalid image URL").optional(),
+  icon: z.string().optional(),
+  color: z.string().optional(),
+  status: z.enum(["ACTIVE", "INACTIVE"]).optional()
 });
 
 export type AdminLoginInput = z.infer<typeof adminLoginSchema>;
