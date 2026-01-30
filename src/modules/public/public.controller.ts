@@ -51,16 +51,19 @@ export class PublicController {
 
   static async getTutorById(req: Request, res: Response) {
     try {
-      const { id } = req.query;
+      const { id } = req.params;
+      console.log('Fetching tutor with ID:', id);
+      const queryId = req.query.id as string;
+      const tutorId = id || queryId;
       
-      if (!id) {
+      if (!tutorId) {
         return res.status(400).json({
           success: false,
           message: "Tutor ID is required"
         });
       }
 
-      const tutor = await PublicService.getTutorById(id as string);
+      const tutor = await PublicService.getTutorById(tutorId);
 
       if (!tutor) {
         return res.status(404).json({

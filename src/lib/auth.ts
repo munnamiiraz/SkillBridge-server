@@ -150,8 +150,7 @@ export const auth = betterAuth({
       },
       phone: {
         type: "string",
-        required: false,
-        defaultValue: "N/A"
+        required: true,
       },
       status: {
         type: "string",

@@ -153,8 +153,14 @@ export class PublicService {
   }
 
   static async getTutorById(id: string) {
-    return await prisma.tutor_profile.findUnique({
-      where: { id },
+    console.log('[PublicService] Querying for tutor with identifier:', id);
+    const tutor = await prisma.tutor_profile.findFirst({
+      where: {
+        OR: [
+          { id: id },
+          { userId: id }
+        ]
+      },
       include: {
         user: {
           select: {
@@ -176,6 +182,17 @@ export class PublicService {
         availability_slot: true
       }
     });
+    
+    if (!tutor) {
+      console.log(`[PublicService] No tutor found with identifier: ${id}`);
+      const availableTutors = await prisma.tutor_profile.findMany({
+        select: { id: true, userId: true },
+        take: 5
+      });
+      console.log('[PublicService] Available tutors:', availableTutors);
+    }
+    
+    return tutor;
   }
 
   static async getTutorReviews(tutorProfileId: string, paginationOptions: PaginationOptions) {

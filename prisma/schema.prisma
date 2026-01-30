@@ -57,7 +57,7 @@ model booking {
 
 model category {
   id          String    @id
-  name        String    @unique
+  name        String    
   description String?
   image       String?
   createdAt   DateTime  @default(now())

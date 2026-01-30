@@ -4,7 +4,7 @@ import { randomUUID } from "crypto";
 
 async function seedAdmin() {
   try {
-    const adminEmail = "admin@skillbridge.com";
+    const adminEmail = "admin@gmail.com";
     const adminPassword = "admin123";
     
     const existingAdmin = await prisma.user.findUnique({
