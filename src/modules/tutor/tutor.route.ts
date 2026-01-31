@@ -1,3 +1,4 @@
+// tutor.routes.ts
 import { Router } from "express";
 import auth, { UserRole } from "../../middleware/auth";
 import { TutorController } from "./tutor.controller";
@@ -8,12 +9,9 @@ router.post("/profile", auth(), TutorController.createProfile);
 router.get("/profile", auth(), TutorController.getProfile);
 router.patch("/profile", auth(UserRole.TUTOR), TutorController.updateProfile);
 
-// Availability slots routes
-router.post("/availability-slots", auth(UserRole.TUTOR), TutorController.createAvailabilitySlot);
+// Availability slots routes - simplified to GET and PUT only
 router.get("/availability-slots", auth(UserRole.TUTOR), TutorController.getAvailabilitySlots);
-router.put("/availability-slots", auth(UserRole.TUTOR), TutorController.manageAvailability);
-router.patch("/availability-slots/:slotId", auth(UserRole.TUTOR), TutorController.updateAvailabilitySlot);
-router.delete("/availability-slots/:slotId", auth(UserRole.TUTOR), TutorController.deleteAvailabilitySlot);
+router.put("/availability-slots", auth(UserRole.TUTOR), TutorController.updateAvailabilitySlots);
 
 // Teaching sessions routes
 router.get("/sessions", auth(UserRole.TUTOR), TutorController.getTeachingSessions);

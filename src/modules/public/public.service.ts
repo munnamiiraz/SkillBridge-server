@@ -112,44 +112,54 @@ export class PublicService {
       ];
     }
 
-    const [tutors, total] = await Promise.all([
-      prisma.tutor_profile.findMany({
-        where: whereClause,
-        include: {
-          user: {
-            select: {
-              id: true,
-              name: true,
-              image: true
-            }
-          },
-          tutor_subject: {
-            include: {
-              subject: {
-                include: {
-                  category: true
+    console.log('[PublicService] whereClause:', JSON.stringify(whereClause, null, 2));
+    console.log('[PublicService] paginationOptions:', JSON.stringify(paginationOptions, null, 2));
+
+    try {
+      const [tutors, total] = await Promise.all([
+        prisma.tutor_profile.findMany({
+          where: whereClause,
+          include: {
+            user: {
+              select: {
+                id: true,
+                name: true,
+                image: true
+              }
+            },
+            tutor_subject: {
+              include: {
+                subject: {
+                  include: {
+                    category: true
+                  }
                 }
               }
             }
-          }
-        },
-        ...paginationOptions
-      }),
-      prisma.tutor_profile.count({ where: whereClause })
-    ]);
+          },
+          ...paginationOptions
+        }),
+        prisma.tutor_profile.count({ where: whereClause })
+      ]);
+      
+      console.log(`[PublicService] Found ${tutors.length} tutors out of ${total} total.`);
+      
+      const totalPages = Math.ceil(total / paginationOptions.take);
+      const currentPage = Math.floor(paginationOptions.skip / paginationOptions.take) + 1;
 
-    const totalPages = Math.ceil(total / paginationOptions.take);
-    const currentPage = Math.floor(paginationOptions.skip / paginationOptions.take) + 1;
-
-    return {
-      data: tutors,
-      meta: {
-        total,
-        page: currentPage,
-        limit: paginationOptions.take,
-        totalPages
-      }
-    };
+      return {
+        data: tutors,
+        meta: {
+          total,
+          page: currentPage,
+          limit: paginationOptions.take,
+          totalPages
+        }
+      };
+    } catch (error) {
+      console.error('[PublicService] Error in searchTutors query:', error);
+      throw error;
+    }
   }
 
   static async getTutorById(id: string) {

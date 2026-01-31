@@ -1,3 +1,4 @@
+// tutor.controller.ts
 import { Request, Response, NextFunction } from "express";
 import { TutorService } from "./tutor.service";
 
@@ -57,14 +58,11 @@ const updateProfile = async (req: Request, res: Response, next: NextFunction) =>
 
 const getProfile = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    // console.log('User from request:', req.user);
-    
     if (!req.user) {
       return res.status(401).json({
         success: false,
         message: "User not authenticated"
       });
-      console.log('User not authenticated');
     }
     
     const result = await TutorService.getProfile(req.user.id);
@@ -88,35 +86,6 @@ const getProfile = async (req: Request, res: Response, next: NextFunction) => {
   }
 };
 
-const createAvailabilitySlot = async (req: Request, res: Response, next: NextFunction) => {
-  try {
-    const result = await TutorService.createAvailabilitySlot(req.user!.id, req.body);
-    
-    res.status(201).json({
-      success: true,
-      message: "Availability slot created successfully",
-      data: result
-    });
-  } catch (error) {
-    next(error);
-  }
-};
-
-const updateAvailabilitySlot = async (req: Request, res: Response, next: NextFunction) => {
-  try {
-    const slotId = req.params.slotId as string;
-    const result = await TutorService.updateAvailabilitySlot(req.user!.id, slotId, req.body);
-    
-    res.status(200).json({
-      success: true,
-      message: "Availability slot updated successfully",
-      data: result
-    });
-  } catch (error) {
-    next(error);
-  }
-};
-
 const getAvailabilitySlots = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const result = await TutorService.getAvailabilitySlots(req.user!.id);
@@ -131,14 +100,14 @@ const getAvailabilitySlots = async (req: Request, res: Response, next: NextFunct
   }
 };
 
-const deleteAvailabilitySlot = async (req: Request, res: Response, next: NextFunction) => {
+const updateAvailabilitySlots = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const slotId = req.params.slotId as string;
-    await TutorService.deleteAvailabilitySlot(req.user!.id, slotId);
+    const result = await TutorService.updateAvailabilitySlots(req.user!.id, req.body);
     
     res.status(200).json({
       success: true,
-      message: "Availability slot deleted successfully"
+      message: "Availability updated successfully",
+      data: result
     });
   } catch (error) {
     next(error);
@@ -175,10 +144,10 @@ const getReviews = async (req: Request, res: Response, next: NextFunction) => {
     // Parse rating safely - if invalid number, treat as undefined
     let ratingNumber: number | undefined = undefined;
     if (rating) {
-        const parsed = Number(rating);
-        if (!isNaN(parsed) && parsed >= 1 && parsed <= 5) {
-            ratingNumber = parsed;
-        }
+      const parsed = Number(rating);
+      if (!isNaN(parsed) && parsed >= 1 && parsed <= 5) {
+        ratingNumber = parsed;
+      }
     }
 
     const result = await TutorService.getReviews(req.user!.id, {
@@ -228,18 +197,14 @@ const updateBookingStatus = async (req: Request, res: Response, next: NextFuncti
   }
 };
 
-const manageAvailability = async (req: Request, res: Response, next: NextFunction) => {
-  try {
-    const result = await TutorService.manageAvailability(req.user!.id, req.body);
-    
-    res.status(200).json({
-      success: true,
-      message: "Availability updated successfully",
-      data: result
-    });
-  } catch (error) {
-    next(error);
-  }
+export const TutorController = { 
+  createProfile, 
+  updateProfile, 
+  getProfile, 
+  getAvailabilitySlots, 
+  updateAvailabilitySlots,
+  getTeachingSessions, 
+  getReviews, 
+  getRatingStats, 
+  updateBookingStatus 
 };
-
-export const TutorController = { createProfile, updateProfile, getProfile, createAvailabilitySlot, updateAvailabilitySlot, getAvailabilitySlots, deleteAvailabilitySlot, manageAvailability, getTeachingSessions, getReviews, getRatingStats, updateBookingStatus };

@@ -1,5 +1,13 @@
+// tutor.service.ts
 import { prisma } from "../../lib/prisma";
-import { createTutorProfileSchema, updateTutorProfileSchema, CreateTutorProfileInput, UpdateTutorProfileInput, createAvailabilitySlotSchema, updateAvailabilitySlotSchema, CreateAvailabilitySlotInput, UpdateAvailabilitySlotInput, manageAvailabilitySchema, ManageAvailabilityInput } from "./tutor.validation";
+import { 
+  createTutorProfileSchema, 
+  updateTutorProfileSchema, 
+  CreateTutorProfileInput, 
+  UpdateTutorProfileInput,
+  updateAvailabilitySlotsSchema,
+  UpdateAvailabilitySlotsInput
+} from "./tutor.validation";
 import { randomUUID } from "crypto";
 import paginationSortingHelper from "../../helpers/paginationSortingHelper";
 
@@ -21,6 +29,48 @@ const reverseDayOfWeekMap: Record<number, string> = {
   5: "FRIDAY",
   6: "SATURDAY",
   7: "SUNDAY"
+};
+
+/**
+ * Convert time string (HH:MM) to minutes since midnight
+ */
+const timeToMinutes = (time: string): number => {
+  const [hours, minutes] = time.split(':').map(Number);
+  return (hours || 0) * 60 + (minutes || 0);
+};
+
+/**
+ * Convert minutes since midnight to time string (HH:MM)
+ */
+const minutesToTime = (minutes: number): string => {
+  const hours = Math.floor(minutes / 60);
+  const mins = minutes % 60;
+  return `${hours.toString().padStart(2, '0')}:${mins.toString().padStart(2, '0')}`;
+};
+
+/**
+ * Split a time range into 1-hour slots
+ * For example: 09:00-12:00 becomes [09:00-10:00, 10:00-11:00, 11:00-12:00]
+ */
+const splitIntoHourSlots = (startTime: string, endTime: string): { startTime: string; endTime: string }[] => {
+  const startMinutes = timeToMinutes(startTime);
+  const endMinutes = timeToMinutes(endTime);
+  const slots: { startTime: string; endTime: string }[] = [];
+  
+  // Create 1-hour slots
+  for (let currentMinutes = startMinutes; currentMinutes < endMinutes; currentMinutes += 60) {
+    const slotEnd = Math.min(currentMinutes + 60, endMinutes);
+    
+    // Only add slots that are exactly 1 hour
+    if (slotEnd - currentMinutes === 60) {
+      slots.push({
+        startTime: minutesToTime(currentMinutes),
+        endTime: minutesToTime(slotEnd)
+      });
+    }
+  }
+  
+  return slots;
 };
 
 const createProfile = async (userId: string, data: CreateTutorProfileInput) => {
@@ -122,7 +172,7 @@ const getProfile = async (userId: string) => {
           data: {
             id: randomUUID(),
             userId,
-            hourlyRate: 25, // Valid default rate (> 0)
+            hourlyRate: 25,
             bio: "Welcome to my profile! I am a passionate tutor ready to help you learn.",
             headline: "SkillBridge Tutor",
             experience: 0,
@@ -149,7 +199,6 @@ const getProfile = async (userId: string) => {
         return newProfile;
       } catch (err) {
         console.error(`[TutorService] Failed to auto-create profile:`, err);
-        // Fallback: return null so controller handles it (though likely 500 if DB error)
         return null; 
       }
     } else {
@@ -160,108 +209,10 @@ const getProfile = async (userId: string) => {
   return profile;
 };
 
-const createAvailabilitySlot = async (userId: string, data: CreateAvailabilitySlotInput) => {
-  const validatedData = createAvailabilitySlotSchema.parse(data);
-  
-  // Get tutor profile
-  const tutorProfile = await prisma.tutor_profile.findUnique({
-    where: { userId }
-  });
-  
-  if (!tutorProfile) {
-    throw new Error("Tutor profile not found");
-  }
-  
-  // Check for overlapping slots on the same day
-  const dayOfWeekInt = dayOfWeekMap[validatedData.dayOfWeek];
-  
-  const existingSlot = await prisma.availability_slot.findFirst({
-    where: {
-      tutorProfileId: tutorProfile.id,
-      dayOfWeek: dayOfWeekInt,
-      OR: [
-        {
-          AND: [
-            { startTime: { lte: validatedData.startTime } },
-            { endTime: { gt: validatedData.startTime } }
-          ]
-        },
-        {
-          AND: [
-            { startTime: { lt: validatedData.endTime } },
-            { endTime: { gte: validatedData.endTime } }
-          ]
-        },
-        {
-          AND: [
-            { startTime: { gte: validatedData.startTime } },
-            { endTime: { lte: validatedData.endTime } }
-          ]
-        }
-      ]
-    }
-  });
-  
-  if (existingSlot) {
-    throw new Error("Time slot overlaps with existing availability");
-  }
-  
-  const slot = await prisma.availability_slot.create({
-    data: {
-      id: randomUUID(),
-      tutorProfileId: tutorProfile.id,
-      dayOfWeek: dayOfWeekInt,
-      startTime: validatedData.startTime,
-      endTime: validatedData.endTime,
-      isRecurring: true
-    }
-  });
-
-  return {
-    ...slot,
-    dayOfWeek: reverseDayOfWeekMap[slot.dayOfWeek] || "UNKNOWN"
-  };
-};
-
-const updateAvailabilitySlot = async (userId: string, slotId: string, data: UpdateAvailabilitySlotInput) => {
-  const validatedData = updateAvailabilitySlotSchema.parse(data);
-  
-  // Get tutor profile
-  const tutorProfile = await prisma.tutor_profile.findUnique({
-    where: { userId }
-  });
-  
-  if (!tutorProfile) {
-    throw new Error("Tutor profile not found");
-  }
-  
-  // Check if slot belongs to tutor
-  const slot = await prisma.availability_slot.findFirst({
-    where: {
-      id: slotId,
-      tutorProfileId: tutorProfile.id
-    }
-  });
-  
-  if (!slot) {
-    throw new Error("Availability slot not found");
-  }
-  
-  const updateData: any = {};
-  
-  if (validatedData.startTime !== undefined) {
-    updateData.startTime = validatedData.startTime;
-  }
-  if (validatedData.endTime !== undefined) {
-    updateData.endTime = validatedData.endTime;
-  }
-  
-  return await prisma.availability_slot.update({
-    where: { id: slotId },
-    data: updateData
-  });
-};
-
+/**
+ * Get tutor's availability slots
+ * Returns them grouped by day and time range for easier frontend display
+ */
 const getAvailabilitySlots = async (userId: string) => {
   const tutorProfile = await prisma.tutor_profile.findUnique({
     where: { userId }
@@ -281,13 +232,54 @@ const getAvailabilitySlots = async (userId: string) => {
     ]
   });
 
-  return slots.map(slot => ({
-    ...slot,
-    dayOfWeek: reverseDayOfWeekMap[slot.dayOfWeek] || "UNKNOWN"
-  }));
+  // Group consecutive slots into ranges for display
+  const groupedSlots: Record<number, { startTime: string; endTime: string }[]> = {};
+  
+  slots.forEach(slot => {
+    if (!groupedSlots[slot.dayOfWeek]) {
+      groupedSlots[slot.dayOfWeek] = [];
+    }
+    
+    const ranges = groupedSlots[slot.dayOfWeek];
+    if (!ranges) return;
+    
+    const lastRange = ranges[ranges.length - 1];
+    
+    // If this slot is consecutive with the last one, extend the range
+    if (lastRange && lastRange.endTime === slot.startTime) {
+      lastRange.endTime = slot.endTime;
+    } else {
+      // Otherwise, start a new range
+      ranges.push({
+        startTime: slot.startTime,
+        endTime: slot.endTime
+      });
+    }
+  });
+  
+  // Convert to frontend format
+  const result = [];
+  for (const [dayOfWeekInt, ranges] of Object.entries(groupedSlots)) {
+    for (const range of ranges) {
+      result.push({
+        id: `${dayOfWeekInt}-${range.startTime}-${range.endTime}`,
+        dayOfWeek: reverseDayOfWeekMap[parseInt(dayOfWeekInt)] || "UNKNOWN",
+        startTime: range.startTime,
+        endTime: range.endTime
+      });
+    }
+  }
+  
+  return result;
 };
 
-const deleteAvailabilitySlot = async (userId: string, slotId: string) => {
+/**
+ * Update tutor's availability slots
+ * This replaces ALL existing slots with new ones
+ */
+const updateAvailabilitySlots = async (userId: string, data: UpdateAvailabilitySlotsInput) => {
+  const validatedData = updateAvailabilitySlotsSchema.parse(data);
+  
   const tutorProfile = await prisma.tutor_profile.findUnique({
     where: { userId }
   });
@@ -296,20 +288,141 @@ const deleteAvailabilitySlot = async (userId: string, slotId: string) => {
     throw new Error("Tutor profile not found");
   }
   
-  const slot = await prisma.availability_slot.findFirst({
-    where: {
-      id: slotId,
-      tutorProfileId: tutorProfile.id
+  // Validate all time slots and split into 1-hour slots
+  const oneHourSlots: Array<{
+    dayOfWeek: number;
+    startTime: string;
+    endTime: string;
+  }> = [];
+  
+  for (const slot of validatedData.slots) {
+    const startMinutes = timeToMinutes(slot.startTime);
+    const endMinutes = timeToMinutes(slot.endTime);
+    
+    // Validate that end time is after start time
+    if (endMinutes <= startMinutes) {
+      throw new Error(`Invalid time range for ${slot.dayOfWeek}: end time must be after start time`);
+    }
+    
+    // Validate that the range is at least 1 hour
+    if (endMinutes - startMinutes < 60) {
+      throw new Error(`Invalid time range for ${slot.dayOfWeek}: minimum duration is 1 hour`);
+    }
+    
+    // Get the day of week number
+    const dayOfWeekNum = dayOfWeekMap[slot.dayOfWeek];
+    if (dayOfWeekNum === undefined) {
+      throw new Error(`Invalid day of week: ${slot.dayOfWeek}`);
+    }
+    
+    // Split into 1-hour slots
+    const hourSlots = splitIntoHourSlots(slot.startTime, slot.endTime);
+    
+    for (const hourSlot of hourSlots) {
+      oneHourSlots.push({
+        dayOfWeek: dayOfWeekNum,
+        startTime: hourSlot.startTime,
+        endTime: hourSlot.endTime
+      });
+    }
+  }
+  
+  // Check for overlapping slots
+  for (let i = 0; i < oneHourSlots.length; i++) {
+    for (let j = i + 1; j < oneHourSlots.length; j++) {
+      const slot1 = oneHourSlots[i];
+      const slot2 = oneHourSlots[j];
+      
+      // Type guards
+      if (!slot1 || !slot2) continue;
+      
+      // Only check slots on the same day
+      if (slot1.dayOfWeek === slot2.dayOfWeek) {
+        const start1 = timeToMinutes(slot1.startTime);
+        const end1 = timeToMinutes(slot1.endTime);
+        const start2 = timeToMinutes(slot2.startTime);
+        const end2 = timeToMinutes(slot2.endTime);
+        
+        // Check for overlap
+        if (start1 < end2 && start2 < end1) {
+          const dayName = reverseDayOfWeekMap[slot1.dayOfWeek];
+          throw new Error(`Overlapping time slots on ${dayName}`);
+        }
+      }
+    }
+  }
+  
+  // Use transaction to replace all slots atomically
+  const result = await prisma.$transaction(async (tx) => {
+    // Delete all existing slots for this tutor
+    await tx.availability_slot.deleteMany({
+      where: {
+        tutorProfileId: tutorProfile.id
+      }
+    });
+    
+    // Create new slots (only if there are slots to create)
+    if (oneHourSlots.length > 0) {
+      await tx.availability_slot.createMany({
+        data: oneHourSlots.map(slot => ({
+          id: randomUUID(),
+          tutorProfileId: tutorProfile.id,
+          dayOfWeek: slot.dayOfWeek,
+          startTime: slot.startTime,
+          endTime: slot.endTime,
+          isRecurring: true
+        }))
+      });
+    }
+    
+    // Return the newly created slots
+    return await tx.availability_slot.findMany({
+      where: {
+        tutorProfileId: tutorProfile.id
+      },
+      orderBy: [
+        { dayOfWeek: 'asc' },
+        { startTime: 'asc' }
+      ]
+    });
+  });
+  
+  // Group slots into ranges for response (same logic as getAvailabilitySlots)
+  const groupedSlots: Record<number, { startTime: string; endTime: string }[]> = {};
+  
+  result.forEach(slot => {
+    if (!groupedSlots[slot.dayOfWeek]) {
+      groupedSlots[slot.dayOfWeek] = [];
+    }
+    
+    const ranges = groupedSlots[slot.dayOfWeek];
+    if (!ranges) return;
+    
+    const lastRange = ranges[ranges.length - 1];
+    
+    if (lastRange && lastRange.endTime === slot.startTime) {
+      lastRange.endTime = slot.endTime;
+    } else {
+      ranges.push({
+        startTime: slot.startTime,
+        endTime: slot.endTime
+      });
     }
   });
   
-  if (!slot) {
-    throw new Error("Availability slot not found");
+  const formattedResult = [];
+  for (const [dayOfWeekInt, ranges] of Object.entries(groupedSlots)) {
+    for (const range of ranges) {
+      formattedResult.push({
+        id: `${dayOfWeekInt}-${range.startTime}-${range.endTime}`,
+        dayOfWeek: reverseDayOfWeekMap[parseInt(dayOfWeekInt)] || "UNKNOWN",
+        startTime: range.startTime,
+        endTime: range.endTime
+      });
+    }
   }
   
-  return await prisma.availability_slot.delete({
-    where: { id: slotId }
-  });
+  return formattedResult;
 };
 
 const getTeachingSessions = async (userId: string, options: { page: number; limit: number; status?: string }) => {
@@ -553,58 +666,14 @@ const updateBookingStatus = async (userId: string, bookingId: string, data: { st
   });
 };
 
-const manageAvailability = async (userId: string, data: ManageAvailabilityInput) => {
-  const validatedData = manageAvailabilitySchema.parse(data);
-  
-  // Get tutor profile
-  const tutorProfile = await prisma.tutor_profile.findUnique({
-    where: { userId }
-  });
-  
-  if (!tutorProfile) {
-    throw new Error("Tutor profile not found");
-  }
-
-  // Use transaction to ensure atomic update
-  return await prisma.$transaction(async (tx) => {
-    // Delete existing slots
-    await tx.availability_slot.deleteMany({
-      where: {
-        tutorProfileId: tutorProfile.id
-      }
-    });
-
-    // Create new slots
-    if (validatedData.slots.length > 0) {
-      await tx.availability_slot.createMany({
-        data: validatedData.slots.map(slot => ({
-          id: randomUUID(), 
-          tutorProfileId: tutorProfile.id,
-          dayOfWeek: dayOfWeekMap[slot.dayOfWeek],
-          startTime: slot.startTime,
-          endTime: slot.endTime,
-          isRecurring: true, 
-          updatedAt: new Date()
-        }))
-      });
-    }
-
-    // Return the new slots
-    const slots = await tx.availability_slot.findMany({
-      where: {
-        tutorProfileId: tutorProfile.id
-      },
-      orderBy: [
-        { dayOfWeek: 'asc' },
-        { startTime: 'asc' }
-      ]
-    });
-
-    return slots.map(slot => ({
-      ...slot,
-      dayOfWeek: reverseDayOfWeekMap[slot.dayOfWeek] || "UNKNOWN"
-    }));
-  });
+export const TutorService = { 
+  createProfile, 
+  updateProfile, 
+  getProfile, 
+  getAvailabilitySlots, 
+  updateAvailabilitySlots,
+  getTeachingSessions, 
+  getReviews, 
+  getRatingStats, 
+  updateBookingStatus 
 };
-
-export const TutorService = { createProfile, updateProfile, getProfile, createAvailabilitySlot, updateAvailabilitySlot, getAvailabilitySlots, deleteAvailabilitySlot, manageAvailability, getTeachingSessions, getReviews, getRatingStats, updateBookingStatus };

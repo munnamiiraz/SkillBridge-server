@@ -41,6 +41,7 @@ export class PublicController {
         meta: result.meta
       });
     } catch (error) {
+      console.error("Error in searchTutors:", error);
       res.status(500).json({
         success: false,
         message: "Failed to search tutors",
@@ -63,7 +64,7 @@ export class PublicController {
         });
       }
 
-      const tutor = await PublicService.getTutorById(tutorId);
+      const tutor = await PublicService.getTutorById(tutorId as string);
 
       if (!tutor) {
         return res.status(404).json({
