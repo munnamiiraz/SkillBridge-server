@@ -5,7 +5,7 @@ import paginationSortingHelper from "../../helpers/paginationSortingHelper";
 export class PublicController {
   static async searchTutors(req: Request, res: Response) {
     try {
-      const { page = 1, limit = 10, subject, category, minRating, maxRating, minPrice, maxPrice, sortBy = "averageRating", sortOrder = "desc" } = req.query;
+      const { page = 1, limit = 10, subject, category, minRating, maxRating, minPrice, maxPrice, minTotalReviews, sortBy = "averageRating", sortOrder = "desc" } = req.query;
 
       const paginationHelper = paginationSortingHelper({
         page: Number(page),
@@ -29,6 +29,7 @@ export class PublicController {
         ...(maxRating && { maxRating: Number(maxRating) }),
         ...(minPrice && { minPrice: Number(minPrice) }),
         ...(maxPrice && { maxPrice: Number(maxPrice) }),
+        ...(minTotalReviews && { minTotalReviews: Number(minTotalReviews) }),
         ...(req.query.searchTerm && { searchTerm: req.query.searchTerm as string }),
       };
 
@@ -160,6 +161,23 @@ export class PublicController {
       res.status(500).json({
         success: false,
         message: "Failed to get featured tutors",
+        error: error instanceof Error ? error.message : "Unknown error"
+      });
+    }
+  }
+
+  static async getCategories(req: Request, res: Response) {
+    try {
+      const result = await PublicService.getAllCategories();
+      res.json({
+        success: true,
+        message: "Categories retrieved successfully",
+        data: result
+      });
+    } catch (error) {
+      res.status(500).json({
+        success: false,
+        message: "Failed to get categories",
         error: error instanceof Error ? error.message : "Unknown error"
       });
     }

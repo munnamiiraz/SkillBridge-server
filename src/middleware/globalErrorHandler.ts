@@ -14,44 +14,48 @@ function errorHandler(
     // PrismaClientValidationError
     if (err instanceof Prisma.PrismaClientValidationError) {
         statusCode = 400;
-        // Include the actual error message from Prisma to debug which field is wrong
-        errorMessage = "Validation Error: " + err.message.replace(/\n/g, ' '); 
+        errorMessage = "Validation Error: " + err.message.split('\n').filter(line => line.trim()).pop() || err.message; 
     }
     // PrismaClientKnownRequestError
     else if (err instanceof Prisma.PrismaClientKnownRequestError) {
+        statusCode = 400;
         if (err.code === "P2025") {
-            statusCode = 400;
-            errorMessage = "An operation failed because it depends on one or more records that were required but not found."
+            errorMessage = "Record not found."
         }
         else if (err.code === "P2002") {
-            statusCode = 400;
-            errorMessage = "Duplicate key error"
+            errorMessage = "A record with this value already exists."
         }
         else if (err.code === "P2003") {
-            statusCode = 400;
-            errorMessage = "Foreign key constraint failed"
+            errorMessage = "Foreign key constraint failed."
+        }
+        else {
+            errorMessage = err.message;
         }
     }
     else if (err instanceof Prisma.PrismaClientUnknownRequestError) {
         statusCode = 500;
-        errorMessage = "Error occurred during query execution"
+        errorMessage = "Database query failed."
     }
     else if (err instanceof Prisma.PrismaClientInitializationError) {
-        if (err.errorCode === "P1000") {
-            statusCode = 401;
-            errorMessage = "Authentication failed. Please check your creditials!"
-        }
-        else if (err.errorCode === "P1001") {
-            statusCode = 400;
-            errorMessage = "Can't reach database server"
-        }
+        statusCode = 500;
+        errorMessage = "Database connection failed."
+    }
+    else if (err instanceof Error) {
+        // Handle generic errors (like "Booking not found", "Cancel window expired")
+        statusCode = 400;
+        errorMessage = err.message;
     }
 
-    res.status(statusCode)
-    res.json({
+    console.error(`[Error] ${statusCode} - ${errorMessage}`);
+    if (statusCode === 500) {
+        console.error(err);
+    }
+
+    res.status(statusCode).json({
+        success: false,
         message: errorMessage,
-        error: errorDetails
-    })
+        error: process.env.NODE_ENV === 'development' ? err : undefined
+    });
 }
 
 export default errorHandler;

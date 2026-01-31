@@ -12,5 +12,6 @@ router.get("/tutors/search", PublicController.searchTutors);
 router.get("/tutors/featured", PublicController.getFeaturedTutors);
 router.get("/tutors/:id", PublicController.getTutorById);
 router.get("/reviews", PublicController.getTutorReviews);
+router.get("/categories", PublicController.getCategories);
 
 export const PublicRoutes = router;

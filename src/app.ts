@@ -8,6 +8,7 @@ import { StudentRoutes } from "./modules/student/student.route";
 import { TutorRoutes } from "./modules/tutor/tutor.route";
 import { PublicRoutes } from "./modules/public/public.route";
 import { AdminRoutes } from "./modules/admin/admin/admin.route";
+import { CategoryRoutes } from "./modules/admin/category/category.routes";
 
 const app: Application = express();
 
@@ -24,6 +25,7 @@ app.use("/api/public", PublicRoutes);
 app.use("/api/student", StudentRoutes);
 app.use("/api/tutor", TutorRoutes);
 app.use("/api/admin", AdminRoutes);
+app.use("/api/admin", CategoryRoutes);
 
 app.get("/", (req, res) => {
     res.send("Hello, World!");

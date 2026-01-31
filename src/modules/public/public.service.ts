@@ -7,6 +7,7 @@ interface SearchFilters {
   maxRating?: number;
   minPrice?: number;
   maxPrice?: number;
+  minTotalReviews?: number;
   searchTerm?: string;
 }
 
@@ -78,6 +79,12 @@ export class PublicService {
       whereClause.hourlyRate = {
         ...whereClause.hourlyRate,
         lte: filters.maxPrice
+      };
+    }
+    
+    if (filters.minTotalReviews !== undefined) {
+      whereClause.totalReviews = {
+        gte: filters.minTotalReviews
       };
     }
 
@@ -311,5 +318,23 @@ export class PublicService {
         totalPages
       }
     };
+  }
+
+  static async getAllCategories() {
+    return await prisma.category.findMany({
+      where: {
+        status: "ACTIVE"
+      },
+      include: {
+        _count: {
+          select: {
+            subject: true
+          }
+        }
+      },
+      orderBy: {
+        name: 'asc'
+      }
+    });
   }
 }

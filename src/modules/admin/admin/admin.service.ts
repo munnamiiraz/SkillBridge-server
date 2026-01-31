@@ -162,8 +162,12 @@ const getAllBookings = async (options: { page: number; limit: number; status?: s
 
   const whereClause: any = {};
 
-  if (options.status) {
-    whereClause.status = options.status;
+  if (options.status && options.status !== 'ALL') {
+    if (options.status === 'UPCOMING') {
+      whereClause.status = { in: ['PENDING', 'CONFIRMED'] };
+    } else if (['PENDING', 'CONFIRMED', 'ONGOING', 'COMPLETED', 'CANCELLED'].includes(options.status)) {
+      whereClause.status = options.status;
+    }
   }
 
 

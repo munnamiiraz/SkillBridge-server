@@ -371,10 +371,9 @@ const cancelBooking = async (studentId: string, bookingId: string): Promise<Book
     throw new Error("Cannot cancel this booking");
   }
 
-  // Check if booking is at least 24 hours away
-  const hoursUntilBooking = (booking.scheduledAt.getTime() - Date.now()) / (1000 * 60 * 60);
-  if (hoursUntilBooking < 24) {
-    throw new Error("Bookings can only be cancelled at least 24 hours in advance");
+  // Check if booking is in the future
+  if (booking.scheduledAt.getTime() < Date.now()) {
+    throw new Error("Cannot cancel a session that has already started or passed");
   }
 
   // Cancel booking and free up the slot in a transaction
@@ -401,14 +400,15 @@ const cancelBooking = async (studentId: string, bookingId: string): Promise<Book
               select: {
                 id: true,
                 name: true,
-                email: true
+                email: true,
+                image: true
               }
             }
           }
         }
       }
     });
-  }) as BookingWithTutor;
+  }) as any;
 };
 
 export const StudentService = { updateProfile, getProfile, createReview, createBooking, getBookings, getReviewableBookings, cancelBooking };
