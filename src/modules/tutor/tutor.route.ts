@@ -21,4 +21,5 @@ router.patch("/sessions/:bookingId/status", auth(UserRole.TUTOR), TutorControlle
 router.get("/reviews", auth(UserRole.TUTOR), TutorController.getReviews);
 router.get("/rating-stats", auth(UserRole.TUTOR), TutorController.getRatingStats);
 
+
 export const TutorRoutes = router;

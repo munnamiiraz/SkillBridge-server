@@ -119,11 +119,8 @@ const createReview = async (studentId: string, data: CreateReviewInput): Promise
 
 const createBooking = async (studentId: string, data: CreateBookingInput): Promise<BookingWithTutor> => {
   try {
-    console.log('Creating booking with data:', data);
-    console.log('Student ID:', studentId);
     
     const validatedData = createBookingSchema.parse(data);
-    console.log('Validated data:', validatedData);
     
     // Check if tutor profile exists and is available
     const tutorProfile = await prisma.tutor_profile.findUnique({
@@ -137,7 +134,6 @@ const createBooking = async (studentId: string, data: CreateBookingInput): Promi
       }
     });
     
-    console.log('Tutor profile found:', tutorProfile);
     
     if (!tutorProfile || !tutorProfile.isAvailable || tutorProfile.user.status !== "ACTIVE") {
       throw new Error("Tutor is not available for booking");
@@ -202,7 +198,6 @@ const createBooking = async (studentId: string, data: CreateBookingInput): Promi
       createBookingData.notes = validatedData.notes;
     }
     
-    console.log('Creating booking with data:', createBookingData);
     
     // Create booking and mark slot as booked in a transaction
     const result = await prisma.$transaction(async (tx) => {
@@ -231,7 +226,6 @@ const createBooking = async (studentId: string, data: CreateBookingInput): Promi
       });
     });
     
-    console.log('Booking created successfully:', result);
     return result as BookingWithTutor;
   } catch (error) {
     console.error('Error in createBooking service:', error);

@@ -1,7 +1,7 @@
-import { prisma } from "../../lib/prisma";
+import { prisma } from "../../../lib/prisma";
 import { adminLoginSchema, AdminLoginInput, updateUserStatusSchema, UpdateUserStatusInput, createCategorySchema, CreateCategoryInput, updateCategorySchema, UpdateCategoryInput } from "./admin.validation";
-import { auth } from "../../lib/auth";
-import paginationSortingHelper from "../../helpers/paginationSortingHelper";
+import { auth } from "../../../lib/auth";
+import paginationSortingHelper from "../../../helpers/paginationSortingHelper";
 import { randomUUID } from "crypto";
 import {
   AdminLoginResponse,
@@ -151,7 +151,6 @@ const updateUserStatus = async (userId: string, data: UpdateUserStatusInput) => 
 };
 
 const getAllBookings = async (options: { page: number; limit: number; status?: string }) => {
-  console.log('getAllBookings called with options:', options);
   
   const paginationHelper = paginationSortingHelper({
     page: options.page,
@@ -160,7 +159,6 @@ const getAllBookings = async (options: { page: number; limit: number; status?: s
     sortOrder: "desc"
   });
 
-  console.log('paginationHelper result:', paginationHelper);
 
   const whereClause: any = {};
 
@@ -168,7 +166,6 @@ const getAllBookings = async (options: { page: number; limit: number; status?: s
     whereClause.status = options.status;
   }
 
-  console.log('whereClause:', whereClause);
 
   try {
     const [bookings, total] = await Promise.all([
@@ -206,7 +203,6 @@ const getAllBookings = async (options: { page: number; limit: number; status?: s
       prisma.booking.count({ where: whereClause })
     ]);
 
-    console.log('Query successful. Bookings count:', bookings.length, 'Total:', total);
 
     const totalPages = Math.ceil(total / paginationHelper.limit);
 
@@ -290,203 +286,7 @@ const getPlatformStats = async () => {
   };
 };
 
-const getCategories = async (options: { page: number; limit: number }) => {
-  const paginationHelper = paginationSortingHelper({
-    page: options.page,
-    limit: options.limit,
-    sortBy: "name",
-    sortOrder: "asc"
-  });
 
-  const [categories, total] = await Promise.all([
-    prisma.category.findMany({
-      include: {
-        subject: {
-          select: {
-            id: true,
-            name: true
-          }
-        },
-        _count: {
-          select: {
-            subject: true
-          }
-        }
-      },
-      skip: paginationHelper.skip,
-      take: paginationHelper.limit,
-      orderBy: {
-        name: paginationHelper.sortOrder as "asc" | "desc"
-      }
-    }),
-    prisma.category.count()
-  ]);
-
-  const totalPages = Math.ceil(total / paginationHelper.limit);
-
-  return {
-    data: categories,
-    meta: {
-      total,
-      page: paginationHelper.page,
-      limit: paginationHelper.limit,
-      totalPages
-    }
-  };
-};
-
-const createCategory = async (data: CreateCategoryInput) => {
-  const validatedData = createCategorySchema.parse(data);
-  
-  const existingCategory = await prisma.category.findUnique({
-    where: { name: validatedData.name }
-  });
-  
-  if (existingCategory) {
-    throw new Error("Category with this name already exists");
-  }
-
-  // Generate slug
-  let slug = validatedData.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)+/g, '');
-  // Ensure slug uniqueness
-  const existingSlug = await prisma.category.findFirst({
-    where: { slug }
-  });
-  if (existingSlug) {
-     slug = `${slug}-${Math.floor(Math.random() * 1000)}`;
-  }
-  
-  const createData: any = {
-    name: validatedData.name,
-    slug
-  };
-  
-  if (validatedData.description !== undefined) {
-    createData.description = validatedData.description;
-  }
-  if (validatedData.image !== undefined) {
-    createData.image = validatedData.image;
-  }
-  if (validatedData.icon !== undefined) {
-    createData.icon = validatedData.icon;
-  }
-  if (validatedData.color !== undefined) {
-    createData.color = validatedData.color;
-  }
-  if (validatedData.status !== undefined) {
-    createData.status = validatedData.status.toLowerCase();
-  }
-  
-  return await prisma.category.create({
-    data: createData,
-    include: {
-      subject: {
-        select: {
-          id: true,
-          name: true
-        }
-      },
-      _count: {
-        select: {
-          subject: true
-        }
-      }
-    }
-  });
-};
-
-const updateCategory = async (categoryId: string, data: UpdateCategoryInput) => {
-  const validatedData = updateCategorySchema.parse(data);
-  
-  const category = await prisma.category.findUnique({
-    where: { id: categoryId }
-  });
-  
-  if (!category) {
-    throw new Error("Category not found");
-  }
-  
-  const updateData: any = {};
-
-  if (validatedData.name && validatedData.name !== category.name) {
-    const existingCategory = await prisma.category.findUnique({
-      where: { name: validatedData.name }
-    });
-    
-    if (existingCategory) {
-      throw new Error("Category with this name already exists");
-    }
-    updateData.name = validatedData.name;
-    // Update slug if name changes
-    let slug = validatedData.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)+/g, '');
-     const existingSlug = await prisma.category.findFirst({
-        where: { slug, id: { not: categoryId } }
-      });
-      if (existingSlug) {
-         slug = `${slug}-${Math.floor(Math.random() * 1000)}`;
-      }
-    updateData.slug = slug;
-  }
-  
-  if (validatedData.description !== undefined) {
-    updateData.description = validatedData.description;
-  }
-  if (validatedData.image !== undefined) {
-    updateData.image = validatedData.image;
-  }
-  if (validatedData.icon !== undefined) {
-    updateData.icon = validatedData.icon;
-  }
-  if (validatedData.color !== undefined) {
-    updateData.color = validatedData.color;
-  }
-  if (validatedData.status !== undefined) {
-    updateData.status = validatedData.status.toLowerCase();
-  }
-  
-  return await prisma.category.update({
-    where: { id: categoryId },
-    data: updateData,
-    include: {
-      subject: {
-        select: {
-          id: true,
-          name: true
-        }
-      },
-      _count: {
-        select: {
-          subject: true
-        }
-      }
-    }
-  });
-};
-
-const deleteCategory = async (categoryId: string) => {
-  const category = await prisma.category.findUnique({
-    where: { id: categoryId },
-    include: {
-      _count: {
-        select: {
-          subject: true
-        }
-      }
-    }
-  });
-  
-  if (!category) {
-    throw new Error("Category not found");
-  }
-  
-  if (category._count.subject > 0) {
-    throw new Error("Cannot delete category with existing subjects");
-  }
-  
-  return await prisma.category.delete({
-    where: { id: categoryId }
-  });
-};
 
 const cancelBooking = async (bookingId: string, data: { reason?: string; refundAmount?: number }) => {
   const booking = await prisma.booking.findUnique({
@@ -526,4 +326,7 @@ const cancelBooking = async (bookingId: string, data: { reason?: string; refundA
   });
 };
 
-export const AdminService = { login, getUsers, updateUserStatus, getAllBookings, cancelBooking, getPlatformStats, getCategories, createCategory, updateCategory, deleteCategory };
+
+
+
+export const AdminService = { login, getUsers, updateUserStatus, getAllBookings, cancelBooking, getPlatformStats };

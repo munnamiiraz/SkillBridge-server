@@ -47,8 +47,6 @@ const createReview = async (req: Request, res: Response, next: NextFunction) => 
 
 const createBooking = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    console.log('Booking request body:', req.body);
-    console.log('User from auth:', req.user);
     
     const { tutorProfileId, scheduledAt, duration, subject, notes } = req.body;
     

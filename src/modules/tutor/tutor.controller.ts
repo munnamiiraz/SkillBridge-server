@@ -4,7 +4,6 @@ import { TutorService } from "./tutor.service";
 
 const createProfile = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    console.log('Creating profile for user:', req.user);
     
     if (!req.user) {
       return res.status(401).json({

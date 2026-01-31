@@ -53,7 +53,6 @@ export class PublicController {
   static async getTutorById(req: Request, res: Response) {
     try {
       const { id } = req.params;
-      console.log('Fetching tutor with ID:', id);
       const queryId = req.query.id as string;
       const tutorId = id || queryId;
       

@@ -7,7 +7,7 @@ import { notFound } from "./middleware/notFound";
 import { StudentRoutes } from "./modules/student/student.route";
 import { TutorRoutes } from "./modules/tutor/tutor.route";
 import { PublicRoutes } from "./modules/public/public.route";
-import { AdminRoutes } from "./modules/admin/admin.route";
+import { AdminRoutes } from "./modules/admin/admin/admin.route";
 
 const app: Application = express();
 

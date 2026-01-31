@@ -112,8 +112,6 @@ export class PublicService {
       ];
     }
 
-    console.log('[PublicService] whereClause:', JSON.stringify(whereClause, null, 2));
-    console.log('[PublicService] paginationOptions:', JSON.stringify(paginationOptions, null, 2));
 
     try {
       const [tutors, total] = await Promise.all([
@@ -142,7 +140,6 @@ export class PublicService {
         prisma.tutor_profile.count({ where: whereClause })
       ]);
       
-      console.log(`[PublicService] Found ${tutors.length} tutors out of ${total} total.`);
       
       const totalPages = Math.ceil(total / paginationOptions.take);
       const currentPage = Math.floor(paginationOptions.skip / paginationOptions.take) + 1;
@@ -163,7 +160,6 @@ export class PublicService {
   }
 
   static async getTutorById(id: string) {
-    console.log('[PublicService] Querying for tutor with identifier:', id);
     const tutor = await prisma.tutor_profile.findFirst({
       where: {
         OR: [
@@ -205,12 +201,10 @@ export class PublicService {
     });
     
     if (!tutor) {
-      console.log(`[PublicService] No tutor found with identifier: ${id}`);
       const availableTutors = await prisma.tutor_profile.findMany({
         select: { id: true, userId: true },
         take: 5
       });
-      console.log('[PublicService] Available tutors:', availableTutors);
     }
     
     return tutor;

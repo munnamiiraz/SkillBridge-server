@@ -1,6 +1,6 @@
 import { Request, Response, NextFunction } from "express";
 import { AdminService } from "./admin.service";
-import { prisma } from "../../lib/prisma";
+import { prisma } from "../../../lib/prisma";
 
 const login = async (req: Request, res: Response, next: NextFunction) => {
   try {
@@ -99,12 +99,9 @@ const unbanUser = async (req: Request, res: Response, next: NextFunction) => {
 
 const getAllBookings = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    console.log('getAllBookings controller called');
-    console.log('Query params:', req.query);
     
     // First, let's check if there are any bookings at all
     const totalBookings = await prisma.booking.count();
-    console.log('Total bookings in database:', totalBookings);
     
     if (totalBookings === 0) {
       return res.status(200).json({
@@ -127,7 +124,6 @@ const getAllBookings = async (req: Request, res: Response, next: NextFunction) =
       status: status as string
     });
     
-    console.log('Service result:', { dataLength: result.data.length, meta: result.meta });
     
     res.status(200).json({
       success: true,
@@ -155,67 +151,7 @@ const getPlatformStats = async (req: Request, res: Response, next: NextFunction)
   }
 };
 
-const getCategories = async (req: Request, res: Response, next: NextFunction) => {
-  try {
-    const { page = 1, limit = 10 } = req.query;
-    const result = await AdminService.getCategories({
-      page: Number(page),
-      limit: Number(limit)
-    });
-    
-    res.status(200).json({
-      success: true,
-      message: "Categories retrieved successfully",
-      data: result.data,
-      meta: result.meta
-    });
-  } catch (error) {
-    next(error);
-  }
-};
 
-const createCategory = async (req: Request, res: Response, next: NextFunction) => {
-  try {
-    const result = await AdminService.createCategory(req.body);
-    
-    res.status(201).json({
-      success: true,
-      message: "Category created successfully",
-      data: result
-    });
-  } catch (error) {
-    next(error);
-  }
-};
-
-const updateCategory = async (req: Request, res: Response, next: NextFunction) => {
-  try {
-    const { categoryId } = req.params;
-    const result = await AdminService.updateCategory(categoryId as string, req.body);
-    
-    res.status(200).json({
-      success: true,
-      message: "Category updated successfully",
-      data: result
-    });
-  } catch (error) {
-    next(error);
-  }
-};
-
-const deleteCategory = async (req: Request, res: Response, next: NextFunction) => {
-  try {
-    const { categoryId } = req.params;
-    await AdminService.deleteCategory(categoryId as string);
-    
-    res.status(200).json({
-      success: true,
-      message: "Category deleted successfully"
-    });
-  } catch (error) {
-    next(error);
-  }
-};
 
 const cancelBooking = async (req: Request, res: Response, next: NextFunction) => {
   try {
@@ -237,4 +173,7 @@ const cancelBooking = async (req: Request, res: Response, next: NextFunction) =>
   }
 };
 
-export const AdminController = { login, getUsers, updateUserStatus, banUser, unbanUser, getAllBookings, cancelBooking, getPlatformStats, getCategories, createCategory, updateCategory, deleteCategory };
+
+
+
+export const AdminController = { login, getUsers, updateUserStatus, banUser, unbanUser, getAllBookings, cancelBooking, getPlatformStats };

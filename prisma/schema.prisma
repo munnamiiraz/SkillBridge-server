@@ -60,16 +60,12 @@ model booking {
 }
 
 model category {
-  id          String    @id @default(uuid())
-  name        String    @unique
-  slug        String?    @unique
+  id          String          @id @default(uuid())
+  name        String          @unique
   description String?
-  image       String?
-  icon        String    @default("💻")
-  color       String    @default("indigo")
-  status      String    @default("active")
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+  status      CategoryStatus  @default(ACTIVE)
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
   subject     subject[]
 }
 
@@ -174,6 +170,7 @@ model verification {
 enum BookingStatus {
   PENDING
   CONFIRMED
+  ONGOING
   COMPLETED
   CANCELLED
 }
@@ -188,4 +185,9 @@ enum UserStatus {
   ACTIVE
   INACTIVE
   BANNED
+}
+
+enum CategoryStatus {
+  ACTIVE
+  INACTIVE
 }

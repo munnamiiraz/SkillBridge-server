@@ -157,16 +157,13 @@ const getProfile = async (userId: string) => {
   });
 
   if (!profile) {
-    console.log(`[TutorService] Profile not found for userId: ${userId}. Checking user role...`);
     const user = await prisma.user.findUnique({
       where: { id: userId },
       select: { id: true, name: true, email: true, image: true, role: true }
     });
 
-    console.log(`[TutorService] User found: ${user ? 'Yes' : 'No'}, Role: ${user?.role}`);
 
     if (user && user.role === 'TUTOR') {
-      console.log(`[TutorService] User is TUTOR. Auto-creating profile...`);
       try {
         const newProfile = await prisma.tutor_profile.create({
           data: {
@@ -195,7 +192,6 @@ const getProfile = async (userId: string) => {
             availability_slot: true
           }
         });
-        console.log(`[TutorService] Auto-created profile successfully: ${newProfile.id}`);
         return newProfile;
       } catch (err) {
         console.error(`[TutorService] Failed to auto-create profile:`, err);
@@ -640,7 +636,7 @@ const updateBookingStatus = async (userId: string, bookingId: string, data: { st
     throw new Error("Booking not found");
   }
 
-  if (!['CONFIRMED', 'COMPLETED', 'CANCELLED'].includes(data.status)) {
+  if (!['CONFIRMED', 'ONGOING', 'COMPLETED', 'CANCELLED'].includes(data.status)) {
     throw new Error("Invalid status");
   }
 
