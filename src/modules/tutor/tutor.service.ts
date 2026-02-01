@@ -10,7 +10,7 @@ import {
 } from "./tutor.validation";
 import { randomUUID } from "crypto";
 import paginationSortingHelper from "../../helpers/paginationSortingHelper";
-
+import { ZodError } from "zod";
 const dayOfWeekMap: Record<string, number> = {
   "MONDAY": 1,
   "TUESDAY": 2,
@@ -21,56 +21,104 @@ const dayOfWeekMap: Record<string, number> = {
   "SUNDAY": 7
 };
 
-const reverseDayOfWeekMap: Record<number, string> = {
-  1: "MONDAY",
-  2: "TUESDAY",
-  3: "WEDNESDAY",
-  4: "THURSDAY",
-  5: "FRIDAY",
-  6: "SATURDAY",
-  7: "SUNDAY"
-};
 
 /**
- * Convert time string (HH:MM) to minutes since midnight
+ * Get tutor's availability slots for a specific week
+ * Returns them grouped by date and time range for easier frontend display
  */
-const timeToMinutes = (time: string): number => {
-  const [hours, minutes] = time.split(':').map(Number);
-  return (hours || 0) * 60 + (minutes || 0);
-};
 
-/**
- * Convert minutes since midnight to time string (HH:MM)
- */
-const minutesToTime = (minutes: number): string => {
-  const hours = Math.floor(minutes / 60);
-  const mins = minutes % 60;
-  return `${hours.toString().padStart(2, '0')}:${mins.toString().padStart(2, '0')}`;
-};
-
-/**
- * Split a time range into 1-hour slots
- * For example: 09:00-12:00 becomes [09:00-10:00, 10:00-11:00, 11:00-12:00]
- */
-const splitIntoHourSlots = (startTime: string, endTime: string): { startTime: string; endTime: string }[] => {
-  const startMinutes = timeToMinutes(startTime);
-  const endMinutes = timeToMinutes(endTime);
-  const slots: { startTime: string; endTime: string }[] = [];
+const getAvailabilitySlots = async (userId: string, weekStartDate?: string) => {
+  const tutorProfile = await prisma.tutor_profile.findUnique({
+    where: { userId }
+  });
   
-  // Create 1-hour slots
-  for (let currentMinutes = startMinutes; currentMinutes < endMinutes; currentMinutes += 60) {
-    const slotEnd = Math.min(currentMinutes + 60, endMinutes);
+  if (!tutorProfile) {
+    throw new Error("Tutor profile not found");
+  }
+  
+  // If no weekStartDate provided, use the current week's Monday
+  let startDate: Date;
+  if (weekStartDate) {
+    startDate = new Date(weekStartDate);
+  } else {
+    const today = new Date();
+    const dayOfWeek = today.getDay();
+    const diff = dayOfWeek === 0 ? -6 : 1 - dayOfWeek; // Adjust to get Monday
+    startDate = new Date(today);
+    startDate.setDate(today.getDate() + diff);
+  }
+  startDate.setHours(0, 0, 0, 0);
+
+  // Calculate end date (Sunday)
+  const endDate = new Date(startDate);
+  endDate.setDate(startDate.getDate() + 6);
+  endDate.setHours(23, 59, 59, 999);
+
+  const slots = await prisma.availability_slot.findMany({
+    where: {
+      tutorProfileId: tutorProfile.id,
+      specificDate: {
+        gte: startDate,
+        lte: endDate
+      }
+    },
+    orderBy: [
+      { specificDate: 'asc' },
+      { startTime: 'asc' }
+    ]
+  });
+
+  // Group consecutive slots into ranges for display, but separate by isBooked status
+  const grouped: Record<string, { startTime: string; endTime: string; isBooked: boolean }[]> = {};
+  
+  for (const s of slots) {
+    if (!s.specificDate) continue;
     
-    // Only add slots that are exactly 1 hour
-    if (slotEnd - currentMinutes === 60) {
-      slots.push({
-        startTime: minutesToTime(currentMinutes),
-        endTime: minutesToTime(slotEnd)
+    const dateKey: string = s.specificDate!.toISOString().split('T')[0]!; // YYYY-MM-DD
+    
+    if (!grouped[dateKey]) {
+      grouped[dateKey] = [];
+    }
+    
+    const ranges = grouped[dateKey]!;
+    const lastRange = ranges[ranges.length - 1];
+    
+    // If this slot is consecutive with the last one AND has the same isBooked status, extend the range
+    if (lastRange && lastRange.endTime === s.startTime && lastRange.isBooked === s.isBooked) {
+      lastRange.endTime = s.endTime;
+    } else {
+      // Otherwise, start a new range
+      ranges.push({
+        startTime: s.startTime,
+        endTime: s.endTime,
+        isBooked: s.isBooked
       });
     }
   }
   
-  return slots;
+  // Convert to frontend format
+  const resultSlots = [];
+  for (const dateKey of Object.keys(grouped)) {
+    const ranges = grouped[dateKey];
+    if (!ranges) continue;
+    
+    for (const range of ranges) {
+      resultSlots.push({
+        id: `${dateKey}-${range.startTime}-${range.endTime}`,
+        date: dateKey,
+        dayOfWeek: reverseDayOfWeekMap[getDayOfWeek(dateKey)] || "UNKNOWN",
+        startTime: range.startTime,
+        endTime: range.endTime,
+        isBooked: range.isBooked
+      });
+    }
+  }
+  
+  return {
+    weekStartDate: startDate.toISOString().split('T')[0],
+    weekEndDate: endDate.toISOString().split('T')[0],
+    slots: resultSlots
+  };
 };
 
 const createProfile = async (userId: string, data: CreateTutorProfileInput) => {
@@ -205,221 +253,6 @@ const getProfile = async (userId: string) => {
   return profile;
 };
 
-/**
- * Get tutor's availability slots
- * Returns them grouped by day and time range for easier frontend display
- */
-const getAvailabilitySlots = async (userId: string) => {
-  const tutorProfile = await prisma.tutor_profile.findUnique({
-    where: { userId }
-  });
-  
-  if (!tutorProfile) {
-    throw new Error("Tutor profile not found");
-  }
-  
-  const slots = await prisma.availability_slot.findMany({
-    where: {
-      tutorProfileId: tutorProfile.id
-    },
-    orderBy: [
-      { dayOfWeek: 'asc' },
-      { startTime: 'asc' }
-    ]
-  });
-
-  // Group consecutive slots into ranges for display
-  const groupedSlots: Record<number, { startTime: string; endTime: string }[]> = {};
-  
-  slots.forEach(slot => {
-    if (!groupedSlots[slot.dayOfWeek]) {
-      groupedSlots[slot.dayOfWeek] = [];
-    }
-    
-    const ranges = groupedSlots[slot.dayOfWeek];
-    if (!ranges) return;
-    
-    const lastRange = ranges[ranges.length - 1];
-    
-    // If this slot is consecutive with the last one, extend the range
-    if (lastRange && lastRange.endTime === slot.startTime) {
-      lastRange.endTime = slot.endTime;
-    } else {
-      // Otherwise, start a new range
-      ranges.push({
-        startTime: slot.startTime,
-        endTime: slot.endTime
-      });
-    }
-  });
-  
-  // Convert to frontend format
-  const result = [];
-  for (const [dayOfWeekInt, ranges] of Object.entries(groupedSlots)) {
-    for (const range of ranges) {
-      result.push({
-        id: `${dayOfWeekInt}-${range.startTime}-${range.endTime}`,
-        dayOfWeek: reverseDayOfWeekMap[parseInt(dayOfWeekInt)] || "UNKNOWN",
-        startTime: range.startTime,
-        endTime: range.endTime
-      });
-    }
-  }
-  
-  return result;
-};
-
-/**
- * Update tutor's availability slots
- * This replaces ALL existing slots with new ones
- */
-const updateAvailabilitySlots = async (userId: string, data: UpdateAvailabilitySlotsInput) => {
-  const validatedData = updateAvailabilitySlotsSchema.parse(data);
-  
-  const tutorProfile = await prisma.tutor_profile.findUnique({
-    where: { userId }
-  });
-  
-  if (!tutorProfile) {
-    throw new Error("Tutor profile not found");
-  }
-  
-  // Validate all time slots and split into 1-hour slots
-  const oneHourSlots: Array<{
-    dayOfWeek: number;
-    startTime: string;
-    endTime: string;
-  }> = [];
-  
-  for (const slot of validatedData.slots) {
-    const startMinutes = timeToMinutes(slot.startTime);
-    const endMinutes = timeToMinutes(slot.endTime);
-    
-    // Validate that end time is after start time
-    if (endMinutes <= startMinutes) {
-      throw new Error(`Invalid time range for ${slot.dayOfWeek}: end time must be after start time`);
-    }
-    
-    // Validate that the range is at least 1 hour
-    if (endMinutes - startMinutes < 60) {
-      throw new Error(`Invalid time range for ${slot.dayOfWeek}: minimum duration is 1 hour`);
-    }
-    
-    // Get the day of week number
-    const dayOfWeekNum = dayOfWeekMap[slot.dayOfWeek];
-    if (dayOfWeekNum === undefined) {
-      throw new Error(`Invalid day of week: ${slot.dayOfWeek}`);
-    }
-    
-    // Split into 1-hour slots
-    const hourSlots = splitIntoHourSlots(slot.startTime, slot.endTime);
-    
-    for (const hourSlot of hourSlots) {
-      oneHourSlots.push({
-        dayOfWeek: dayOfWeekNum,
-        startTime: hourSlot.startTime,
-        endTime: hourSlot.endTime
-      });
-    }
-  }
-  
-  // Check for overlapping slots
-  for (let i = 0; i < oneHourSlots.length; i++) {
-    for (let j = i + 1; j < oneHourSlots.length; j++) {
-      const slot1 = oneHourSlots[i];
-      const slot2 = oneHourSlots[j];
-      
-      // Type guards
-      if (!slot1 || !slot2) continue;
-      
-      // Only check slots on the same day
-      if (slot1.dayOfWeek === slot2.dayOfWeek) {
-        const start1 = timeToMinutes(slot1.startTime);
-        const end1 = timeToMinutes(slot1.endTime);
-        const start2 = timeToMinutes(slot2.startTime);
-        const end2 = timeToMinutes(slot2.endTime);
-        
-        // Check for overlap
-        if (start1 < end2 && start2 < end1) {
-          const dayName = reverseDayOfWeekMap[slot1.dayOfWeek];
-          throw new Error(`Overlapping time slots on ${dayName}`);
-        }
-      }
-    }
-  }
-  
-  // Use transaction to replace all slots atomically
-  const result = await prisma.$transaction(async (tx) => {
-    // Delete all existing slots for this tutor
-    await tx.availability_slot.deleteMany({
-      where: {
-        tutorProfileId: tutorProfile.id
-      }
-    });
-    
-    // Create new slots (only if there are slots to create)
-    if (oneHourSlots.length > 0) {
-      await tx.availability_slot.createMany({
-        data: oneHourSlots.map(slot => ({
-          id: randomUUID(),
-          tutorProfileId: tutorProfile.id,
-          dayOfWeek: slot.dayOfWeek,
-          startTime: slot.startTime,
-          endTime: slot.endTime,
-          isRecurring: true
-        }))
-      });
-    }
-    
-    // Return the newly created slots
-    return await tx.availability_slot.findMany({
-      where: {
-        tutorProfileId: tutorProfile.id
-      },
-      orderBy: [
-        { dayOfWeek: 'asc' },
-        { startTime: 'asc' }
-      ]
-    });
-  });
-  
-  // Group slots into ranges for response (same logic as getAvailabilitySlots)
-  const groupedSlots: Record<number, { startTime: string; endTime: string }[]> = {};
-  
-  result.forEach(slot => {
-    if (!groupedSlots[slot.dayOfWeek]) {
-      groupedSlots[slot.dayOfWeek] = [];
-    }
-    
-    const ranges = groupedSlots[slot.dayOfWeek];
-    if (!ranges) return;
-    
-    const lastRange = ranges[ranges.length - 1];
-    
-    if (lastRange && lastRange.endTime === slot.startTime) {
-      lastRange.endTime = slot.endTime;
-    } else {
-      ranges.push({
-        startTime: slot.startTime,
-        endTime: slot.endTime
-      });
-    }
-  });
-  
-  const formattedResult = [];
-  for (const [dayOfWeekInt, ranges] of Object.entries(groupedSlots)) {
-    for (const range of ranges) {
-      formattedResult.push({
-        id: `${dayOfWeekInt}-${range.startTime}-${range.endTime}`,
-        dayOfWeek: reverseDayOfWeekMap[parseInt(dayOfWeekInt)] || "UNKNOWN",
-        startTime: range.startTime,
-        endTime: range.endTime
-      });
-    }
-  }
-  
-  return formattedResult;
-};
 
 const getTeachingSessions = async (userId: string, options: { page: number; limit: number; status?: string }) => {
   const tutorProfile = await prisma.tutor_profile.findUnique({
@@ -660,6 +493,186 @@ const updateBookingStatus = async (userId: string, bookingId: string, data: { st
       }
     }
   });
+};
+
+// tutor.service.ts (updateAvailabilitySlots method helpers)
+
+
+// Helper function to convert time string to minutes
+const timeToMinutes = (time: string): number => {
+  const [hours, minutes] = time.split(':').map(Number);
+  return (hours ?? 0) * 60 + (minutes ?? 0);
+};
+
+// Helper function to get day of week number (0 = Sunday, 1 = Monday, etc.)
+const getDayOfWeek = (dateString: string): number => {
+  return new Date(dateString + "T00:00:00.000Z").getUTCDay();
+};
+
+// Day of week reverse map
+const reverseDayOfWeekMap: Record<number, string> = {
+  0: "SUNDAY",
+  1: "MONDAY",
+  2: "TUESDAY",
+  3: "WEDNESDAY",
+  4: "THURSDAY",
+  5: "FRIDAY",
+  6: "SATURDAY"
+};
+
+export const updateAvailabilitySlots = async (
+  userId: string,
+  slots: UpdateAvailabilitySlotsInput
+) => {
+  console.log("Updating slots for user:", userId);
+  console.log("Slots received:", JSON.stringify(slots, null, 2));
+
+  // Get tutor profile
+  const tutorProfile = await prisma.tutor_profile.findUnique({
+    where: { userId }
+  });
+  console.log("Slots: ", slots);
+  
+  if (!tutorProfile) {
+    throw new Error("Tutor profile not found");
+  }
+
+  // Get the week range from the first slot's date
+  const firstDate = new Date(slots[0]!.date + "T00:00:00.000Z");
+  const day = firstDate.getUTCDay();
+  const diff = day === 0 ? -6 : 1 - day; // Calculate difference to get to Monday
+
+  const weekStart = new Date(firstDate);
+  weekStart.setUTCDate(firstDate.getUTCDate() + diff);
+  weekStart.setUTCHours(0, 0, 0, 0);
+
+  const weekEnd = new Date(weekStart);
+  weekEnd.setUTCDate(weekStart.getUTCDate() + 6);
+  weekEnd.setUTCHours(23, 59, 59, 999);
+
+  console.log("Week range:", {
+    weekStart: weekStart.toISOString().slice(0, 10),
+    weekEnd: weekEnd.toISOString().slice(0, 10)
+  });
+
+  // Validate all slots are within the same week
+  for (const slot of slots) {
+    const slotDate = new Date(slot.date + "T00:00:00.000Z");
+    if (slotDate < weekStart || slotDate > weekEnd) {
+      throw new Error(
+        `All slots must be within the same week (${weekStart.toISOString().slice(0, 10)} to ${weekEnd.toISOString().slice(0, 10)})`
+      );
+    }
+  }
+
+  // Process slots and check for overlaps on the same date
+  const slotsToCreate: Array<{
+    date: string;
+    dayOfWeek: number;
+    startTime: string;
+    endTime: string;
+  }> = [];
+
+  for (const slot of slots) {
+    const dow = getDayOfWeek(slot.date);
+    slotsToCreate.push({
+      date: slot.date,
+      dayOfWeek: dow,
+      startTime: slot.startTime,
+      endTime: slot.endTime
+    });
+  }
+
+  // Check for overlapping slots on the same date
+  for (let i = 0; i < slotsToCreate.length; i++) {
+    for (let j = i + 1; j < slotsToCreate.length; j++) {
+      const slotA = slotsToCreate[i]!;
+      const slotB = slotsToCreate[j]!;
+
+      if (slotA.date !== slotB.date) continue;
+
+      const startA = timeToMinutes(slotA.startTime);
+      const endA = timeToMinutes(slotA.endTime);
+      const startB = timeToMinutes(slotB.startTime);
+      const endB = timeToMinutes(slotB.endTime);
+
+      // Check for overlap
+      if (startA < endB && startB < endA) {
+        throw new Error(
+          `Overlapping slots on ${slotA.date}: ${slotA.startTime}-${slotA.endTime} and ${slotB.startTime}-${slotB.endTime}`
+        );
+      }
+    }
+  }
+
+  // Transaction: delete all non-booked slots in the week and insert new ones
+  const result = await prisma.$transaction(async (tx) => {
+    // Delete all existing non-booked slots for this week
+    const deletedCount = await tx.availability_slot.deleteMany({
+      where: {
+        tutorProfileId: tutorProfile.id,
+        isBooked: false,
+        specificDate: {
+          gte: weekStart,
+          lte: weekEnd
+        }
+      }
+    });
+
+    console.log(`Deleted ${deletedCount.count} existing slots`);
+
+    // Create new slots
+    if (slotsToCreate.length > 0) {
+      const createData = slotsToCreate.map(slot => ({
+        id: randomUUID(),
+        tutorProfileId: tutorProfile.id,
+        dayOfWeek: slot.dayOfWeek,
+        startTime: slot.startTime,
+        endTime: slot.endTime,
+        specificDate: new Date(slot.date + "T00:00:00.000Z"),
+        isRecurring: false,
+        isBooked: false
+      }));
+
+      await tx.availability_slot.createMany({
+        data: createData
+      });
+
+      console.log(`Created ${createData.length} new slots`);
+    }
+
+    // Return all slots for this week (including any booked ones that weren't deleted)
+    return await tx.availability_slot.findMany({
+      where: {
+        tutorProfileId: tutorProfile.id,
+        specificDate: {
+          gte: weekStart,
+          lte: weekEnd
+        }
+      },
+      orderBy: [
+        { specificDate: "asc" },
+        { startTime: "asc" }
+      ]
+    });
+  });
+
+  // Format the response
+  const formattedSlots = result.map(slot => ({
+    id: slot.id,
+    date: slot.specificDate?.toISOString().slice(0, 10) ?? "",
+    dayOfWeek: reverseDayOfWeekMap[slot.dayOfWeek] ?? "UNKNOWN",
+    startTime: slot.startTime,
+    endTime: slot.endTime,
+    isBooked: slot.isBooked
+  }));
+
+  return {
+    weekStartDate: weekStart.toISOString().slice(0, 10),
+    weekEndDate: weekEnd.toISOString().slice(0, 10),
+    totalSlots: formattedSlots.length,
+    slots: formattedSlots
+  };
 };
 
 export const TutorService = { 

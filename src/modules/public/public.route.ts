@@ -11,6 +11,7 @@ router.use((req, res, next) => {
 router.get("/tutors/search", PublicController.searchTutors);
 router.get("/tutors/featured", PublicController.getFeaturedTutors);
 router.get("/tutors/:id", PublicController.getTutorById);
+router.get("/tutors/:id/availability", PublicController.getTutorAvailability);
 router.get("/reviews", PublicController.getTutorReviews);
 router.get("/categories", PublicController.getCategories);
 

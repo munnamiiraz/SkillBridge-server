@@ -1,6 +1,7 @@
 // tutor.controller.ts
 import { Request, Response, NextFunction } from "express";
 import { TutorService } from "./tutor.service";
+import { updateAvailabilitySlotsSchema } from "./tutor.validation";
 
 const createProfile = async (req: Request, res: Response, next: NextFunction) => {
   try {
@@ -87,7 +88,11 @@ const getProfile = async (req: Request, res: Response, next: NextFunction) => {
 
 const getAvailabilitySlots = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const result = await TutorService.getAvailabilitySlots(req.user!.id);
+    const { weekStartDate } = req.query;
+    const result = await TutorService.getAvailabilitySlots(
+      req.user!.id,
+      weekStartDate as string | undefined
+    );
     
     res.status(200).json({
       success: true,
@@ -99,19 +104,31 @@ const getAvailabilitySlots = async (req: Request, res: Response, next: NextFunct
   }
 };
 
-const updateAvailabilitySlots = async (req: Request, res: Response, next: NextFunction) => {
+export const updateAvailabilitySlots = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
   try {
-    const result = await TutorService.updateAvailabilitySlots(req.user!.id, req.body);
+    // Validate the request body
+    const validatedSlots = updateAvailabilitySlotsSchema.parse(req.body);
     
+    // Update the availability slots
+    const result = await TutorService.updateAvailabilitySlots(
+      req.user!.id,
+      validatedSlots
+    );
+
     res.status(200).json({
       success: true,
-      message: "Availability updated successfully",
+      message: "Availability slots updated successfully",
       data: result
     });
   } catch (error) {
     next(error);
   }
 };
+
 
 const getTeachingSessions = async (req: Request, res: Response, next: NextFunction) => {
   try {

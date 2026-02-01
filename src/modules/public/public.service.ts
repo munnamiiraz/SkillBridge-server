@@ -337,4 +337,113 @@ export class PublicService {
       }
     });
   }
+
+  static async getTutorAvailability(tutorId: string, weekStartDate?: string) {
+    const tutorProfile = await prisma.tutor_profile.findFirst({
+      where: {
+        OR: [
+          { id: tutorId },
+          { userId: tutorId }
+        ]
+      }
+    });
+    
+    if (!tutorProfile) {
+      throw new Error("Tutor profile not found");
+    }
+    
+    // If no weekStartDate provided, use the current week's Monday
+    let startDate: Date;
+    if (weekStartDate) {
+      startDate = new Date(weekStartDate);
+    } else {
+      const today = new Date();
+      const dayOfWeek = today.getDay();
+      const diff = dayOfWeek === 0 ? -6 : 1 - dayOfWeek; // Adjust to get Monday
+      startDate = new Date(today);
+      startDate.setDate(today.getDate() + diff);
+    }
+    startDate.setHours(0, 0, 0, 0);
+
+    // Calculate end date (Sunday)
+    const endDate = new Date(startDate);
+    endDate.setDate(startDate.getDate() + 6);
+    endDate.setHours(23, 59, 59, 999);
+
+    const slots = await prisma.availability_slot.findMany({
+      where: {
+        tutorProfileId: tutorProfile.id,
+        specificDate: {
+          gte: startDate,
+          lte: endDate
+        }
+      },
+      orderBy: [
+        { specificDate: 'asc' },
+        { startTime: 'asc' }
+      ]
+    });
+
+    const reverseDayOfWeekMap: Record<number, string> = {
+      0: "SUNDAY",
+      1: "MONDAY",
+      2: "TUESDAY",
+      3: "WEDNESDAY",
+      4: "THURSDAY",
+      5: "FRIDAY",
+      6: "SATURDAY"
+    };
+
+    // Group consecutive slots into ranges for display, but separate by isBooked status
+    const grouped: Record<string, { startTime: string; endTime: string; isBooked: boolean }[]> = {};
+    
+    for (const s of slots) {
+      if (!s.specificDate) continue;
+      
+      const dateKey: string = s.specificDate!.toISOString().split('T')[0]!; // YYYY-MM-DD
+      
+      if (!grouped[dateKey]) {
+        grouped[dateKey] = [];
+      }
+      
+      const ranges = grouped[dateKey]!;
+      const lastRange = ranges[ranges.length - 1];
+      
+      // If this slot is consecutive with the last one AND has the same isBooked status, extend the range
+      if (lastRange && lastRange.endTime === s.startTime && lastRange.isBooked === s.isBooked) {
+        lastRange.endTime = s.endTime;
+      } else {
+        // Otherwise, start a new range
+        ranges.push({
+          startTime: s.startTime,
+          endTime: s.endTime,
+          isBooked: s.isBooked
+        });
+      }
+    }
+    
+    // Convert to frontend format
+    const resultSlots = [];
+    for (const dateKey of Object.keys(grouped)) {
+      const ranges = grouped[dateKey];
+      if (!ranges) continue;
+      
+      for (const range of ranges) {
+        resultSlots.push({
+          id: `${dateKey}-${range.startTime}-${range.endTime}`,
+          date: dateKey,
+          dayOfWeek: reverseDayOfWeekMap[new Date(dateKey + "T00:00:00.000Z").getUTCDay()] || "UNKNOWN",
+          startTime: range.startTime,
+          endTime: range.endTime,
+          isBooked: range.isBooked
+        });
+      }
+    }
+    
+    return {
+      weekStartDate: startDate.toISOString().split('T')[0],
+      weekEndDate: endDate.toISOString().split('T')[0],
+      slots: resultSlots
+    };
+  }
 }

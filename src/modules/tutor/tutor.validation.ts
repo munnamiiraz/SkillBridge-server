@@ -29,11 +29,9 @@ export const updateTutorProfileSchema = z.object({
   message: "At least one field must be provided for update"
 });
 
-// Schema for a single time slot (time range, not 1-hour slot)
+// Schema for a single time slot
 export const timeSlotSchema = z.object({
-  dayOfWeek: z.enum(["MONDAY", "TUESDAY", "WEDNESDAY", "THURSDAY", "FRIDAY", "SATURDAY", "SUNDAY"], {
-    errorMap: () => ({ message: "Invalid day of week" })
-  }),
+  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Invalid date format (YYYY-MM-DD)"),
   startTime: z.string().regex(/^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/, "Invalid time format (HH:MM)"),
   endTime: z.string().regex(/^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/, "Invalid time format (HH:MM)")
 }).refine((data) => {
@@ -44,20 +42,10 @@ export const timeSlotSchema = z.object({
   return endMinutes > startMinutes;
 }, {
   message: "End time must be after start time"
-}).refine((data) => {
-  const start = data.startTime.split(':').map(Number);
-  const end = data.endTime.split(':').map(Number);
-  const startMinutes = start[0]! * 60 + start[1]!;
-  const endMinutes = end[0]! * 60 + end[1]!;
-  return (endMinutes - startMinutes) >= 60;
-}, {
-  message: "Time range must be at least 1 hour"
 });
 
-// Schema for updating all availability slots at once
-export const updateAvailabilitySlotsSchema = z.object({
-  slots: z.array(timeSlotSchema)
-});
+// Schema for updating availability slots (array of slots)
+export const updateAvailabilitySlotsSchema = z.array(timeSlotSchema).min(1, "At least one slot is required");
 
 export type TimeSlotInput = z.infer<typeof timeSlotSchema>;
 export type UpdateAvailabilitySlotsInput = z.infer<typeof updateAvailabilitySlotsSchema>;

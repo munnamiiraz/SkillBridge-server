@@ -161,17 +161,28 @@ const createBooking = async (studentId: string, data: CreateBookingInput): Promi
     }
     
     // Find the availability slot for this booking
-    const dayOfWeek = scheduledDate.getDay() === 0 ? 7 : scheduledDate.getDay();
-    const timeString = scheduledDate.toTimeString().substring(0, 5);
+    const scheduledDateOnly = new Date(scheduledDate);
+    scheduledDateOnly.setUTCHours(0, 0, 0, 0);
     
+    const hours = scheduledDate.getUTCHours();
+    const minutes = scheduledDate.getUTCMinutes();
+    const timeString = `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`;
+    
+
+    // console.log("Tutor profile: ", validatedData.tutorProfileId)
+    // console.log("Date: ", scheduledDateOnly)
+    // console.log("Time: ", timeString)
     const availabilitySlot = await prisma.availability_slot.findFirst({
       where: {
         tutorProfileId: validatedData.tutorProfileId,
-        dayOfWeek: dayOfWeek,
+        specificDate: scheduledDateOnly,
         startTime: timeString,
         isBooked: false
       }
     });
+    
+    // console.log("Is bookes: ", timeString)
+
     
     if (!availabilitySlot) {
       throw new Error("This time slot is not available");
@@ -201,11 +212,13 @@ const createBooking = async (studentId: string, data: CreateBookingInput): Promi
     
     // Create booking and mark slot as booked in a transaction
     const result = await prisma.$transaction(async (tx) => {
-      // Mark the availability slot as booked
-      await tx.availability_slot.update({
-        where: { id: availabilitySlot.id },
-        data: { isBooked: true }
-      });
+      // Mark the availability slot as booked ONLY if it is NOT recurring
+      if (availabilitySlot && !availabilitySlot.isRecurring) {
+        await tx.availability_slot.update({
+          where: { id: availabilitySlot.id },
+          data: { isBooked: true }
+        });
+      }
       
       // Create the booking
       return await tx.booking.create({
@@ -378,8 +391,8 @@ const cancelBooking = async (studentId: string, bookingId: string): Promise<Book
 
   // Cancel booking and free up the slot in a transaction
   return await prisma.$transaction(async (tx) => {
-    // Free up the availability slot if it exists
-    if (booking.availabilitySlotId) {
+    // Free up the availability slot if it exists and is NOT recurring
+    if (booking.availabilitySlotId && booking.availability_slot && !booking.availability_slot.isRecurring) {
       await tx.availability_slot.update({
         where: { id: booking.availabilitySlotId },
         data: { isBooked: false }

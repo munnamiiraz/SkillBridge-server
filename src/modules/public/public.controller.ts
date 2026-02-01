@@ -182,4 +182,28 @@ export class PublicController {
       });
     }
   }
+
+  static async getTutorAvailability(req: Request, res: Response) {
+    try {
+      const { id } = req.params;
+      const { weekStartDate } = req.query;
+      
+      const result = await PublicService.getTutorAvailability(
+        id as string, 
+        weekStartDate as string | undefined
+      );
+
+      res.json({
+        success: true,
+        message: "Tutor availability retrieved successfully",
+        data: result
+      });
+    } catch (error) {
+      res.status(500).json({
+        success: false,
+        message: "Failed to get tutor availability",
+        error: error instanceof Error ? error.message : "Unknown error"
+      });
+    }
+  }
 }
