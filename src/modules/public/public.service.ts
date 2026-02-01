@@ -326,6 +326,11 @@ export class PublicService {
         status: "ACTIVE"
       },
       include: {
+        subject: {
+          orderBy: {
+            name: 'asc'
+          }
+        },
         _count: {
           select: {
             subject: true

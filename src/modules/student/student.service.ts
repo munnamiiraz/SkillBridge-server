@@ -42,61 +42,72 @@ const getProfile = async (userId: string): Promise<UserProfile | null> => {
   }) as UserProfile | null;
 };
 
-const createReview = async (studentId: string, data: CreateReviewInput): Promise<CreateReviewResponse> => {
+const createReview = async (
+  studentId: string,
+  data: CreateReviewInput
+): Promise<CreateReviewResponse> => {
+  // Validate input
+  
   const validatedData = createReviewSchema.parse(data);
   
-  // Check if booking exists and belongs to the student
+  // Find the booking for this student
   const booking = await prisma.booking.findFirst({
     where: {
       id: validatedData.bookingId,
-      studentId: studentId
-    }
+      studentId: studentId,
+    },
   });
-  
+
   if (!booking) {
     throw new Error("Booking not found or doesn't belong to you");
   }
-  
-  // Check if session time has passed
-  const sessionEndTime = new Date(booking.scheduledAt.getTime() + booking.duration * 60000);
-  const now = new Date();
 
+  // Convert scheduledAt to local Date object
+  const scheduledDate = new Date(booking.scheduledAt); // assumed already local
+  const sessionEndTime = new Date(scheduledDate.getTime() + booking.duration * 60 * 1000); // use actual booking duration
+  const now = new Date(); // local time
+
+  // Check if session is completed
+  
   if (booking.status === "COMPLETED") {
-    // Already completed, proceed to review
-  } else if (booking.status === "CONFIRMED" && sessionEndTime < now) {
-    // Session passed but not marked completed - allow review and auto-complete
+    // Already completed, proceed
+  } else if (booking.status === "CONFIRMED" && sessionEndTime <= now) {
+    // Session passed, auto-complete
     await prisma.booking.update({
       where: { id: booking.id },
-      data: { status: "COMPLETED", updatedAt: new Date() }
+      data: { status: "COMPLETED", updatedAt: new Date() },
     });
+  } else if (sessionEndTime > now) {
+    throw new Error("You can only review after the session has ended");
   } else {
     throw new Error("You can only review completed sessions");
   }
 
-  if (sessionEndTime > now) {
-    throw new Error("You can only review after the session has ended");
-  }
-  
-  // Check if review already exists for this booking
+  // Check if review already exists
   const existingReview = await prisma.review.findUnique({
-    where: { bookingId: validatedData.bookingId }
+    where: { bookingId: validatedData.bookingId },
   });
+  
   
   if (existingReview) {
     throw new Error("Review already exists for this booking");
   }
   
+  // Prepare create data
   const createData: any = {
+    id: randomUUID(),
     bookingId: validatedData.bookingId,
     studentId: studentId,
-    rating: validatedData.rating
+    rating: validatedData.rating,
   };
-  
-  if (validatedData.comment !== undefined) {
+
+
+  if (validatedData.comment) {
     createData.comment = validatedData.comment;
   }
-  
-  return await prisma.review.create({
+
+  // Create review
+  return prisma.review.create({
     data: createData,
     include: {
       booking: {
@@ -104,18 +115,16 @@ const createReview = async (studentId: string, data: CreateReviewInput): Promise
           tutor_profile: {
             include: {
               user: {
-                select: {
-                  id: true,
-                  name: true
-                }
-              }
-            }
-          }
-        }
-      }
-    }
-  }) as CreateReviewResponse;
+                select: { id: true, name: true },
+              },
+            },
+          },
+        },
+      },
+    },
+  }) as Promise<CreateReviewResponse>;
 };
+
 
 const createBooking = async (studentId: string, data: CreateBookingInput): Promise<BookingWithTutor> => {
   try {

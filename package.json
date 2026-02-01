@@ -5,9 +5,10 @@
   "main": "index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "dev": "npx tsx watch src/server.ts",
-    "seed:admin": "npx tsx src/scripts/seedAdmin.ts",
-    "seed": "npx tsx prisma/seed.ts"
+    "dev": "nodemon --watch src --watch .env --ext ts,json --exec tsx src/server.ts",
+    "dev:poll": "nodemon --watch src --watch .env --ext ts,json --legacy-watch --exec tsx src/server.ts",
+    "seed:admin": "tsx src/scripts/seedAdmin.ts",
+    "seed": "tsx prisma/seed.ts"
   },
   "keywords": [],
   "author": "",
@@ -21,7 +22,8 @@
     "@types/pg": "^8.16.0",
     "prisma": "^7.3.0",
     "tsx": "^4.21.0",
-    "typescript": "^5.9.3"
+    "typescript": "^5.9.3",
+    "nodemon": "^3.1.9"
   },
   "dependencies": {
     "@prisma/adapter-pg": "^7.3.0",

@@ -21,6 +21,30 @@ const dayOfWeekMap: Record<string, number> = {
   "SUNDAY": 7
 };
 
+const reverseDayOfWeekMap: Record<number, string> = {
+  0: "SUNDAY",
+  1: "MONDAY",
+  2: "TUESDAY",
+  3: "WEDNESDAY",
+  4: "THURSDAY",
+  5: "FRIDAY",
+  6: "SATURDAY"
+};
+
+const timeToMinutes = (time: string): number => {
+  const [h, m] = time.split(":").map(Number);
+  return (isNaN(h) ? 0 : h) * 60 + (isNaN(m) ? 0 : m);
+};
+
+const minutesToTime = (minutes: number): string => {
+  const h = Math.floor(minutes / 60);
+  const m = minutes % 60;
+  return `${h.toString().padStart(2, "0")}:${m.toString().padStart(2, "0")}`;
+};
+
+const getDayOfWeek = (dateString: string): number =>
+  new Date(dateString + "T00:00:00.000Z").getUTCDay();
+
 
 /**
  * Get tutor's availability slots for a specific week
@@ -124,34 +148,44 @@ const getAvailabilitySlots = async (userId: string, weekStartDate?: string) => {
 const createProfile = async (userId: string, data: CreateTutorProfileInput) => {
   const validatedData = createTutorProfileSchema.parse(data);
   
-  const createData: any = {
-    userId,
-    hourlyRate: validatedData.hourlyRate
-  };
-  
-  if (validatedData.bio !== undefined) {
-    createData.bio = validatedData.bio;
-  }
-  if (validatedData.headline !== undefined) {
-    createData.headline = validatedData.headline;
-  }
-  if (validatedData.experience !== undefined) {
-    createData.experience = validatedData.experience;
-  }
-  if (validatedData.education !== undefined) {
-    createData.education = validatedData.education;
-  }
-  
-  const profile = await prisma.tutor_profile.create({
-    data: createData,
-    include: {
-      user: {
-        select: { id: true, name: true, email: true, image: true }
+  // Use transaction to ensure everything is created correctly
+  const result = await prisma.$transaction(async (tx) => {
+    // 1. Create the tutor profile
+    const profile = await tx.tutor_profile.create({
+      data: {
+        id: randomUUID(),
+        userId,
+        bio: validatedData.bio,
+        headline: validatedData.headline,
+        hourlyRate: validatedData.hourlyRate,
+        experience: validatedData.experience,
+        education: validatedData.education,
+        isAvailable: true // Default to available
       }
-    }
+    });
+
+    // 2. Link subjects (categories)
+    const tutorSubjects = validatedData.subjectIds.map(subjectId => ({
+      id: randomUUID(),
+      tutorProfileId: profile.id,
+      subjectId
+    }));
+
+    await tx.tutor_subject.createMany({
+      data: tutorSubjects
+    });
+
+    // 3. Update user role to TUTOR
+    await tx.user.update({
+      where: { id: userId },
+      data: { role: 'TUTOR' }
+    });
+
+    return profile;
   });
   
-  return profile;
+  // Return the profile with associated details
+  return await getProfile(userId);
 };
 
 const updateProfile = async (userId: string, data: UpdateTutorProfileInput) => {
@@ -205,52 +239,20 @@ const getProfile = async (userId: string) => {
   });
 
   if (!profile) {
-    const user = await prisma.user.findUnique({
-      where: { id: userId },
-      select: { id: true, name: true, email: true, image: true, role: true }
-    });
-
-
-    if (user && user.role === 'TUTOR') {
-      try {
-        const newProfile = await prisma.tutor_profile.create({
-          data: {
-            id: randomUUID(),
-            userId,
-            hourlyRate: 25,
-            bio: "Welcome to my profile! I am a passionate tutor ready to help you learn.",
-            headline: "SkillBridge Tutor",
-            experience: 0,
-            education: "",
-            isAvailable: true
-          },
-          include: {
-            user: {
-              select: { id: true, name: true, email: true, image: true, role: true }
-            },
-            tutor_subject: {
-              include: {
-                subject: {
-                  include: {
-                    category: true
-                  }
-                }
-              }
-            },
-            availability_slot: true
-          }
-        });
-        return newProfile;
-      } catch (err) {
-        console.error(`[TutorService] Failed to auto-create profile:`, err);
-        return null; 
-      }
-    } else {
-      console.log(`[TutorService] User is not TUTOR or not found. Skipping auto-creation.`);
-    }
+    return null;
   }
 
-  return profile;
+  // Fetch reviews and stats safely
+  const [stats, reviews] = await Promise.all([
+    getRatingStats(userId).catch(() => null),
+    getReviews(userId, { page: 1, limit: 10 }).catch(() => null)
+  ]);
+
+  return {
+    ...profile,
+    ratingStats: stats,
+    recentReviews: reviews ? reviews.data : []
+  };
 };
 
 
@@ -351,7 +353,7 @@ const getReviews = async (userId: string, options: { page: number; limit: number
     prisma.review.findMany({
       where: whereClause,
       include: {
-        student: {
+        user: {
           select: {
             id: true,
             name: true,
@@ -464,6 +466,7 @@ const updateBookingStatus = async (userId: string, bookingId: string, data: { st
       tutorProfileId: tutorProfile.id
     }
   });
+  console.log("hi");
 
   if (!booking) {
     throw new Error("Booking not found");
@@ -476,6 +479,9 @@ const updateBookingStatus = async (userId: string, bookingId: string, data: { st
   if (booking.status === "CANCELLED") {
     throw new Error("Cannot update cancelled booking");
   }
+  
+  console.log(bookingId);
+  
 
   return await prisma.booking.update({
     where: { id: bookingId },
@@ -499,181 +505,163 @@ const updateBookingStatus = async (userId: string, bookingId: string, data: { st
 
 
 // Helper function to convert time string to minutes
-const timeToMinutes = (time: string): number => {
-  const [hours, minutes] = time.split(':').map(Number);
-  return (hours ?? 0) * 60 + (minutes ?? 0);
-};
-
-// Helper function to get day of week number (0 = Sunday, 1 = Monday, etc.)
-const getDayOfWeek = (dateString: string): number => {
-  return new Date(dateString + "T00:00:00.000Z").getUTCDay();
-};
-
-// Day of week reverse map
-const reverseDayOfWeekMap: Record<number, string> = {
-  0: "SUNDAY",
-  1: "MONDAY",
-  2: "TUESDAY",
-  3: "WEDNESDAY",
-  4: "THURSDAY",
-  5: "FRIDAY",
-  6: "SATURDAY"
-};
-
 export const updateAvailabilitySlots = async (
   userId: string,
-  slots: UpdateAvailabilitySlotsInput
+  data: { weekStartDate: string; slots: Array<{ date: string; startTime: string; endTime: string }> }
 ) => {
+  // ---------- helpers ----------
+  // used global helpers: timeToMinutes, minutesToTime, getDayOfWeek, reverseDayOfWeekMap
+
   console.log("Updating slots for user:", userId);
-  console.log("Slots received:", JSON.stringify(slots, null, 2));
+  console.log("Request data:", JSON.stringify(data, null, 2));
 
-  // Get tutor profile
-  const tutorProfile = await prisma.tutor_profile.findUnique({
-    where: { userId }
-  });
-  console.log("Slots: ", slots);
-  
-  if (!tutorProfile) {
-    throw new Error("Tutor profile not found");
-  }
+  // ---------- tutor profile ----------
+  const tutorProfile = await prisma.tutor_profile.findUnique({ where: { userId } });
+  if (!tutorProfile) throw new Error("Tutor profile not found");
 
-  // Get the week range from the first slot's date
-  const firstDate = new Date(slots[0]!.date + "T00:00:00.000Z");
-  const day = firstDate.getUTCDay();
-  const diff = day === 0 ? -6 : 1 - day; // Calculate difference to get to Monday
-
-  const weekStart = new Date(firstDate);
-  weekStart.setUTCDate(firstDate.getUTCDate() + diff);
+  // ---------- week bounds ----------
+  const weekStart = new Date(data.weekStartDate + "T00:00:00.000Z");
   weekStart.setUTCHours(0, 0, 0, 0);
+  if (weekStart.getUTCDay() !== 1) throw new Error("Week start date must be a Monday");
 
   const weekEnd = new Date(weekStart);
   weekEnd.setUTCDate(weekStart.getUTCDate() + 6);
   weekEnd.setUTCHours(23, 59, 59, 999);
 
-  console.log("Week range:", {
-    weekStart: weekStart.toISOString().slice(0, 10),
-    weekEnd: weekEnd.toISOString().slice(0, 10)
-  });
-
-  // Validate all slots are within the same week
-  for (const slot of slots) {
-    const slotDate = new Date(slot.date + "T00:00:00.000Z");
-    if (slotDate < weekStart || slotDate > weekEnd) {
-      throw new Error(
-        `All slots must be within the same week (${weekStart.toISOString().slice(0, 10)} to ${weekEnd.toISOString().slice(0, 10)})`
-      );
-    }
-  }
-
-  // Process slots and check for overlaps on the same date
-  const slotsToCreate: Array<{
+  // ---------- build exact 1-hour chunks from input (do NOT use original ranges) ----------
+  const oneHourChunks: {
     date: string;
     dayOfWeek: number;
     startTime: string;
     endTime: string;
-  }> = [];
+    startMin: number;
+    endMin: number;
+  }[] = [];
 
-  for (const slot of slots) {
-    const dow = getDayOfWeek(slot.date);
-    slotsToCreate.push({
-      date: slot.date,
-      dayOfWeek: dow,
-      startTime: slot.startTime,
-      endTime: slot.endTime
-    });
-  }
+  for (const slot of data.slots) {
+    const slotDate = new Date(slot.date + "T00:00:00.000Z");
+    slotDate.setUTCHours(0, 0, 0, 0);
+    if (slotDate < weekStart || slotDate > weekEnd) {
+      throw new Error(`Slot date ${slot.date} is outside the week ${weekStart.toISOString().slice(0, 10)} - ${weekEnd.toISOString().slice(0, 10)}`);
+    }
 
-  // Check for overlapping slots on the same date
-  for (let i = 0; i < slotsToCreate.length; i++) {
-    for (let j = i + 1; j < slotsToCreate.length; j++) {
-      const slotA = slotsToCreate[i]!;
-      const slotB = slotsToCreate[j]!;
+    const startMin = timeToMinutes(slot.startTime);
+    const endMin = timeToMinutes(slot.endTime);
 
-      if (slotA.date !== slotB.date) continue;
+    if (isNaN(startMin) || isNaN(endMin)) throw new Error(`Invalid time format for ${slot.date}`);
+    if (endMin <= startMin) throw new Error(`Invalid time range for ${slot.date}: end must be after start`);
+    if (endMin - startMin < 60) throw new Error(`Minimum duration is 1 hour for ${slot.date}`);
 
-      const startA = timeToMinutes(slotA.startTime);
-      const endA = timeToMinutes(slotA.endTime);
-      const startB = timeToMinutes(slotB.startTime);
-      const endB = timeToMinutes(slotB.endTime);
-
-      // Check for overlap
-      if (startA < endB && startB < endA) {
-        throw new Error(
-          `Overlapping slots on ${slotA.date}: ${slotA.startTime}-${slotA.endTime} and ${slotB.startTime}-${slotB.endTime}`
-        );
-      }
+    // Create 1-hour chunks: [start, start+60), [start+60, start+120) ... up to end
+    let cur = startMin;
+    while (cur + 60 <= endMin) {
+      const next = cur + 60;
+      oneHourChunks.push({
+        date: slot.date,
+        dayOfWeek: getDayOfWeek(slot.date),
+        startTime: minutesToTime(cur),
+        endTime: minutesToTime(next),
+        startMin: cur,
+        endMin: next
+      });
+      cur = next;
     }
   }
 
-  // Transaction: delete all non-booked slots in the week and insert new ones
-  const result = await prisma.$transaction(async (tx) => {
-    // Delete all existing non-booked slots for this week
-    const deletedCount = await tx.availability_slot.deleteMany({
+  // ---------- dedupe chunks so same 1-hour slot from multiple inputs doesn't replicate ----------
+  const seen = new Set<string>();
+  const dedupedChunks = oneHourChunks
+    .sort((a, b) => (a.date === b.date ? a.startMin - b.startMin : a.date.localeCompare(b.date)))
+    .filter(chunk => {
+      const key = `${chunk.date}|${chunk.startMin}-${chunk.endMin}`;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+
+  console.log("One-hour chunks to insert:", dedupedChunks);
+
+  // ---------- transaction: delete non-booked, then insert these exact 1-hour chunks ----------
+  const createdAndExisting = await prisma.$transaction(async (tx) => {
+    // remove all non-booked slots in the week for this tutor
+    await tx.availability_slot.deleteMany({
       where: {
         tutorProfileId: tutorProfile.id,
         isBooked: false,
-        specificDate: {
-          gte: weekStart,
-          lte: weekEnd
-        }
+        specificDate: { gte: weekStart, lte: weekEnd }
       }
     });
 
-    console.log(`Deleted ${deletedCount.count} existing slots`);
-
-    // Create new slots
-    if (slotsToCreate.length > 0) {
-      const createData = slotsToCreate.map(slot => ({
+    // prepare create payload (each chunk becomes one DB row)
+    if (dedupedChunks.length > 0) {
+      const createPayload = dedupedChunks.map(c => ({
         id: randomUUID(),
         tutorProfileId: tutorProfile.id,
-        dayOfWeek: slot.dayOfWeek,
-        startTime: slot.startTime,
-        endTime: slot.endTime,
-        specificDate: new Date(slot.date + "T00:00:00.000Z"),
+        dayOfWeek: c.dayOfWeek,
+        startTime: c.startTime,
+        endTime: c.endTime,
+        specificDate: new Date(c.date + "T00:00:00.000Z"),
         isRecurring: false,
         isBooked: false
       }));
 
-      await tx.availability_slot.createMany({
-        data: createData
-      });
+      // debug - if this still inserts wrong values you will see the payload in logs
+      console.log("createPayload (first 10):", createPayload.slice(0, 10));
 
-      console.log(`Created ${createData.length} new slots`);
+      // insert all 1-hour rows
+      // createMany is used for performance; skipDuplicates avoids unique constraint errors if any
+      await tx.availability_slot.createMany({ data: createPayload, skipDuplicates: true });
+      console.log(`Inserted ${createPayload.length} one-hour slots`);
+    } else {
+      console.log("No one-hour chunks to insert");
     }
 
-    // Return all slots for this week (including any booked ones that weren't deleted)
-    return await tx.availability_slot.findMany({
+    // return all slots for week (booked + newly inserted)
+    return tx.availability_slot.findMany({
       where: {
         tutorProfileId: tutorProfile.id,
-        specificDate: {
-          gte: weekStart,
-          lte: weekEnd
-        }
+        specificDate: { gte: weekStart, lte: weekEnd }
       },
-      orderBy: [
-        { specificDate: "asc" },
-        { startTime: "asc" }
-      ]
+      orderBy: [{ specificDate: "asc" }, { startTime: "asc" }]
     });
   });
 
-  // Format the response
-  const formattedSlots = result.map(slot => ({
-    id: slot.id,
-    date: slot.specificDate?.toISOString().slice(0, 10) ?? "",
-    dayOfWeek: reverseDayOfWeekMap[slot.dayOfWeek] ?? "UNKNOWN",
-    startTime: slot.startTime,
-    endTime: slot.endTime,
-    isBooked: slot.isBooked
-  }));
+  // ---------- group consecutive DB rows for response (this does NOT affect DB) ----------
+  const grouped: Record<string, { startTime: string; endTime: string }[]> = {};
+  createdAndExisting.forEach(s => {
+    if (!s.specificDate) return;
+    const dateKey = s.specificDate.toISOString().slice(0, 10);
+    grouped[dateKey] ??= [];
+    const last = grouped[dateKey][grouped[dateKey].length - 1];
+    if (last && last.endTime === s.startTime) {
+      last.endTime = s.endTime;
+    } else {
+      grouped[dateKey].push({ startTime: s.startTime, endTime: s.endTime });
+    }
+  });
+
+  const formattedSlots: Array<{ id: string; date: string; dayOfWeek: string; startTime: string; endTime: string }> = [];
+  for (const [date, ranges] of Object.entries(grouped)) {
+    for (const r of ranges) {
+      formattedSlots.push({
+        id: `${date}-${r.startTime}-${r.endTime}`,
+        date,
+        dayOfWeek: reverseDayOfWeekMap[getDayOfWeek(date)] ?? "UNKNOWN",
+        startTime: r.startTime,
+        endTime: r.endTime
+      });
+    }
+  }
 
   return {
     weekStartDate: weekStart.toISOString().slice(0, 10),
     weekEndDate: weekEnd.toISOString().slice(0, 10),
-    totalSlots: formattedSlots.length,
+    totalSlots: createdAndExisting.length,
     slots: formattedSlots
   };
 };
+
+
 
 export const TutorService = { 
   createProfile, 
@@ -681,7 +669,7 @@ export const TutorService = {
   getProfile, 
   getAvailabilitySlots, 
   updateAvailabilitySlots,
-  getTeachingSessions, 
+  getTeachingSessions,
   getReviews, 
   getRatingStats, 
   updateBookingStatus 

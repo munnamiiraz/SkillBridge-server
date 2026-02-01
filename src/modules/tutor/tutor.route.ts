@@ -11,13 +11,7 @@ router.patch("/profile", auth(UserRole.TUTOR), TutorController.updateProfile);
 
 // Availability slots routes - simplified to GET and PUT only
 router.get("/availability-slots", auth(UserRole.TUTOR), TutorController.getAvailabilitySlots);
-import validateRequest from "../../middleware/validateRequest";
-import { updateAvailabilitySlotsSchema } from "./tutor.validation";
 
-// ... previous code ...
-
-// Availability slots routes - simplified to GET and PUT only
-router.get("/availability-slots", auth(UserRole.TUTOR), TutorController.getAvailabilitySlots);
 router.put(
   "/availability-slots",
   auth(UserRole.TUTOR),

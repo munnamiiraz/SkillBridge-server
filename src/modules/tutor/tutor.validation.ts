@@ -2,11 +2,12 @@
 import { z } from "zod";
 
 export const createTutorProfileSchema = z.object({
-  bio: z.string().min(10, "Bio must be at least 10 characters").max(1000, "Bio too long").optional(),
-  headline: z.string().min(5, "Headline must be at least 5 characters").max(200, "Headline too long").optional(),
+  bio: z.string().min(10, "Bio must be at least 10 characters").max(1000, "Bio too long"),
+  headline: z.string().min(5, "Headline must be at least 5 characters").max(200, "Headline too long"),
   hourlyRate: z.number().min(1, "Hourly rate must be at least $1").max(1000, "Hourly rate too high"),
-  experience: z.number().min(0, "Experience cannot be negative").max(50, "Experience too high").optional(),
-  education: z.string().min(5, "Education must be at least 5 characters").max(500, "Education too long").optional()
+  experience: z.number().min(0, "Experience cannot be negative").max(50, "Experience too high"),
+  education: z.string().min(5, "Education must be at least 5 characters").max(500, "Education too long"),
+  subjectIds: z.array(z.string()).min(1, "At least one subject must be selected")
 });
 
 export const updateTutorProfileSchema = z.object({
