@@ -45,8 +45,11 @@ export const timeSlotSchema = z.object({
   message: "End time must be after start time"
 });
 
-// Schema for updating availability slots (array of slots)
-export const updateAvailabilitySlotsSchema = z.array(timeSlotSchema).min(1, "At least one slot is required");
+// Schema for updating availability slots
+export const updateAvailabilitySlotsSchema = z.object({
+  weekStartDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Invalid date format (YYYY-MM-DD)"),
+  slots: z.array(timeSlotSchema).min(1, "At least one slot is required")
+});
 
 export type TimeSlotInput = z.infer<typeof timeSlotSchema>;
 export type UpdateAvailabilitySlotsInput = z.infer<typeof updateAvailabilitySlotsSchema>;

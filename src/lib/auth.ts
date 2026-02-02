@@ -26,6 +26,7 @@ export const auth = betterAuth({
     sendVerificationEmail: async ( { user, url, token }, request) => {
       try {
         const verificationUrl = `${process.env.APP_URL}/verify-email?token=${token}`
+        console.log(`Sending verification email to ${user.email} with URL: ${verificationUrl}`);
       const info = await transporter.sendMail({
       from: '"SkillBridge" <munnamiiraz@gmail.com>',
       to: user.email as string,
