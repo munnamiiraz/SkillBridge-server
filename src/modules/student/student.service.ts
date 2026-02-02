@@ -107,7 +107,7 @@ const createReview = async (
   }
 
   // Create review and update tutor stats in a transaction
-  return await prisma.$transaction(async (tx) => {
+  const result = await prisma.$transaction(async (tx) => {
     // Create the review
     const review = await tx.review.create({
       data: createData,
@@ -157,7 +157,9 @@ const createReview = async (
     });
 
     return review;
-  }) as Promise<CreateReviewResponse>;
+  });
+
+  return result;
 };
 
 

@@ -1,5 +1,5 @@
 import { prisma } from "../lib/prisma";
-import { auth } from "../lib/auth";
+import bcrypt from "bcryptjs";
 import { randomUUID } from "crypto";
 
 async function seedAdmin() {
@@ -16,11 +16,7 @@ async function seedAdmin() {
       return;
     }
     
-    const hashedPassword = await auth.api.hashPassword({
-      body: {
-        password: adminPassword
-      }
-    });
+    const hashedPassword = await bcrypt.hash(adminPassword, 12);
     
     const userId = randomUUID();
     const accountId = randomUUID();

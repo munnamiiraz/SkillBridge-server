@@ -73,7 +73,7 @@ export interface CreateReviewResponse {
   bookingId: string;
   studentId: string;
   rating: number;
-  comment?: string;
+  comment: string | null;
   createdAt: Date;
   updatedAt: Date;
   booking: {

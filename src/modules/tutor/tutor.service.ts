@@ -32,7 +32,9 @@ const reverseDayOfWeekMap: Record<number, string> = {
 };
 
 const timeToMinutes = (time: string): number => {
-  const [h, m] = time.split(":").map(Number);
+  const parts = time.split(":");
+  const h = parseInt(parts[0] || "0", 10);
+  const m = parseInt(parts[1] || "0", 10);
   return (isNaN(h) ? 0 : h) * 60 + (isNaN(m) ? 0 : m);
 };
 
