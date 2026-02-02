@@ -236,7 +236,8 @@ export class PublicService {
           booking: {
             select: {
               id: true,
-              scheduledAt: true
+              scheduledAt: true,
+              subject: true
             }
           }
         },
@@ -449,6 +450,57 @@ export class PublicService {
       weekStartDate: startDate.toISOString().split('T')[0],
       weekEndDate: endDate.toISOString().split('T')[0],
       slots: resultSlots
+    };
+  }
+
+  static async getTutorRatingStats(tutorId: string) {
+    // Find tutor profile
+    const tutorProfile = await prisma.tutor_profile.findFirst({
+      where: {
+        OR: [
+          { id: tutorId },
+          { userId: tutorId }
+        ]
+      }
+    });
+    
+    if (!tutorProfile) {
+      throw new Error("Tutor profile not found");
+    }
+
+    // Get all reviews for this tutor
+    const reviews = await prisma.review.findMany({
+      where: {
+        booking: {
+          tutorProfileId: tutorProfile.id
+        }
+      },
+      select: {
+        rating: true
+      }
+    });
+
+    const totalReviews = reviews.length;
+    const averageRating = totalReviews > 0
+      ? reviews.reduce((sum, r) => sum + r.rating, 0) / totalReviews
+      : 0;
+
+    // Calculate distribution
+    const distribution = [5, 4, 3, 2, 1].map(rating => {
+      const count = reviews.filter(r => r.rating === rating).length;
+      const percentage = totalReviews > 0 ? Math.round((count / totalReviews) * 100) : 0;
+      
+      return {
+        rating,
+        count,
+        percentage
+      };
+    });
+
+    return {
+      totalReviews,
+      averageRating: Math.round(averageRating * 10) / 10, // Round to 1 decimal
+      distribution
     };
   }
 }

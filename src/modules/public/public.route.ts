@@ -12,6 +12,7 @@ router.get("/tutors/search", PublicController.searchTutors);
 router.get("/tutors/featured", PublicController.getFeaturedTutors);
 router.get("/tutors/:id", PublicController.getTutorById);
 router.get("/tutors/:id/availability", PublicController.getTutorAvailability);
+router.get("/tutors/:id/rating-stats", PublicController.getTutorRatingStats);
 router.get("/reviews", PublicController.getTutorReviews);
 router.get("/categories", PublicController.getCategories);
 

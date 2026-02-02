@@ -7,6 +7,7 @@ const router = Router();
 router.get("/profile", auth(UserRole.STUDENT), StudentController.getProfile);
 router.patch("/profile", auth(UserRole.STUDENT), StudentController.updateProfile);
 router.post("/reviews", auth(UserRole.STUDENT), StudentController.createReview);
+router.get("/reviews", auth(UserRole.STUDENT), StudentController.getReviews);
 router.post("/bookings", auth(UserRole.STUDENT), StudentController.createBooking);
 router.get("/bookings", auth(UserRole.STUDENT), StudentController.getBookings);
 router.patch("/bookings/:bookingId/cancel", auth(UserRole.STUDENT), StudentController.cancelBooking);

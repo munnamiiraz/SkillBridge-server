@@ -206,4 +206,31 @@ export class PublicController {
       });
     }
   }
+
+  static async getTutorRatingStats(req: Request, res: Response) {
+    try {
+      const { id } = req.params;
+      
+      if (!id) {
+        return res.status(400).json({
+          success: false,
+          message: "Tutor ID is required"
+        });
+      }
+
+      const result = await PublicService.getTutorRatingStats(id as string);
+
+      res.json({
+        success: true,
+        message: "Rating statistics retrieved successfully",
+        data: result
+      });
+    } catch (error) {
+      res.status(500).json({
+        success: false,
+        message: "Failed to get rating statistics",
+        error: error instanceof Error ? error.message : "Unknown error"
+      });
+    }
+  }
 }

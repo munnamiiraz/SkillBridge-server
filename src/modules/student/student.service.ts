@@ -106,22 +106,57 @@ const createReview = async (
     createData.comment = validatedData.comment;
   }
 
-  // Create review
-  return prisma.review.create({
-    data: createData,
-    include: {
-      booking: {
-        include: {
-          tutor_profile: {
-            include: {
-              user: {
-                select: { id: true, name: true },
+  // Create review and update tutor stats in a transaction
+  return await prisma.$transaction(async (tx) => {
+    // Create the review
+    const review = await tx.review.create({
+      data: createData,
+      include: {
+        booking: {
+          include: {
+            tutor_profile: {
+              include: {
+                user: {
+                  select: { id: true, name: true },
+                },
               },
             },
           },
         },
       },
-    },
+    });
+
+    // Update tutor profile stats
+    const tutorProfileId = booking.tutorProfileId;
+    
+    // Get all reviews for this tutor to calculate new stats
+    const allReviews = await tx.review.findMany({
+      where: {
+        booking: {
+          tutorProfileId: tutorProfileId
+        }
+      },
+      select: {
+        rating: true
+      }
+    });
+
+    const totalReviews = allReviews.length;
+    const averageRating = totalReviews > 0
+      ? allReviews.reduce((sum, r) => sum + r.rating, 0) / totalReviews
+      : 0;
+
+    // Update tutor profile with new stats
+    await tx.tutor_profile.update({
+      where: { id: tutorProfileId },
+      data: {
+        totalReviews: totalReviews,
+        averageRating: Math.round(averageRating * 10) / 10, // Round to 1 decimal
+        updatedAt: new Date()
+      }
+    });
+
+    return review;
   }) as Promise<CreateReviewResponse>;
 };
 
@@ -433,4 +468,56 @@ const cancelBooking = async (studentId: string, bookingId: string): Promise<Book
   }) as any;
 };
 
-export const StudentService = { updateProfile, getProfile, createReview, createBooking, getBookings, getReviewableBookings, cancelBooking };
+const getReviews = async (studentId: string, options: PaginationOptions): Promise<PaginatedResponse<any>> => {
+  const paginationHelper = paginationSortingHelper({
+    page: options.page,
+    limit: options.limit,
+    sortBy: "createdAt",
+    sortOrder: "desc"
+  });
+
+  const [reviews, total] = await Promise.all([
+    prisma.review.findMany({
+      where: {
+        studentId: studentId
+      },
+      include: {
+        booking: {
+          include: {
+            tutor_profile: {
+              include: {
+                user: {
+                  select: {
+                    id: true,
+                    name: true,
+                    image: true
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      skip: paginationHelper.skip,
+      take: paginationHelper.limit,
+      orderBy: {
+        createdAt: paginationHelper.sortOrder as "asc" | "desc"
+      }
+    }),
+    prisma.review.count({ where: { studentId: studentId } })
+  ]);
+
+  const totalPages = Math.ceil(total / paginationHelper.limit);
+
+  return {
+    data: reviews,
+    meta: {
+      total,
+      page: paginationHelper.page,
+      limit: paginationHelper.limit,
+      totalPages
+    }
+  };
+};
+
+export const StudentService = { updateProfile, getProfile, createReview, createBooking, getBookings, getReviewableBookings, cancelBooking, getReviews };
