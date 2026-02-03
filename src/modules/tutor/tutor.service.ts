@@ -11,6 +11,7 @@ import {
 import { randomUUID } from "crypto";
 import paginationSortingHelper from "../../helpers/paginationSortingHelper";
 import { ZodError } from "zod";
+import { boolean } from "better-auth";
 const dayOfWeekMap: Record<string, number> = {
   "MONDAY": 1,
   "TUESDAY": 2,
@@ -514,8 +515,6 @@ export const updateAvailabilitySlots = async (
   // ---------- helpers ----------
   // used global helpers: timeToMinutes, minutesToTime, getDayOfWeek, reverseDayOfWeekMap
 
-  console.log("Updating slots for user:", userId);
-  console.log("Request data:", JSON.stringify(data, null, 2));
 
   // ---------- tutor profile ----------
   const tutorProfile = await prisma.tutor_profile.findUnique({ where: { userId } });
@@ -582,6 +581,29 @@ export const updateAvailabilitySlots = async (
     });
 
   console.log("One-hour chunks to insert:", dedupedChunks);
+
+  //check if any of the time slot is not in past
+
+  function nowInBangladesh() {
+    return new Date(
+      new Date().toLocaleString("en-US", { timeZone: "Asia/Dhaka" })
+    );
+  }
+
+  const now = nowInBangladesh();
+  let isEverythingInFutureInLocalDateAndTime = true;
+  for (const chunk of dedupedChunks) {
+    const slotDate = new Date(chunk.date + "T" + chunk.startTime + ":00.000Z");
+    
+    if (slotDate < now) {
+      isEverythingInFutureInLocalDateAndTime = false;
+      break;
+    }
+  }
+
+  if (!isEverythingInFutureInLocalDateAndTime) {
+    throw new Error("All time slots must be in the future");
+  }
 
   // ---------- transaction: delete non-booked, then insert these exact 1-hour chunks ----------
   const createdAndExisting = await prisma.$transaction(async (tx) => {

@@ -123,7 +123,16 @@ export class PublicService {
     try {
       const [tutors, total] = await Promise.all([
         prisma.tutor_profile.findMany({
-          where: whereClause,
+          where: {
+            AND: [
+              whereClause,
+              {
+                user: {
+                  status: "ACTIVE"
+                }
+              }
+            ]
+          },
           include: {
             user: {
               select: {
@@ -169,9 +178,18 @@ export class PublicService {
   static async getTutorById(id: string) {
     const tutor = await prisma.tutor_profile.findFirst({
       where: {
-        OR: [
-          { id: id },
-          { userId: id }
+        AND: [
+          {
+            OR: [
+              { id: id },
+              { userId: id }
+            ],
+          },
+          {
+            user: {
+              status: "ACTIVE"
+            }
+          }
         ]
       },
       include: {

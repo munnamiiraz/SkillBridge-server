@@ -13,7 +13,7 @@ router.patch("/users/:userId/ban", auth(UserRole.ADMIN), AdminController.banUser
 router.patch("/users/:userId/unban", auth(UserRole.ADMIN), AdminController.unbanUser);
 
 // Booking management
-router.get("/bookings", AdminController.getAllBookings);
+router.get("/bookings", auth(UserRole.ADMIN), AdminController.getAllBookings);
 router.patch("/bookings/:bookingId/cancel", auth(UserRole.ADMIN), AdminController.cancelBooking);
 
 // Platform statistics

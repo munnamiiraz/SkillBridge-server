@@ -2,7 +2,6 @@ import { betterAuth } from "better-auth";
 import { prismaAdapter } from "better-auth/adapters/prisma";
 import { prisma } from "./prisma";
 import nodemailer from "nodemailer";
-import { log } from "console";
 
 const transporter = nodemailer.createTransport({
   host: "smtp.gmail.com",
@@ -140,7 +139,8 @@ export const auth = betterAuth({
 
   trustedOrigins: [
     process.env.APP_URL || "http://localhost:3000",
-    "http://localhost:9000"
+    "http://localhost:9000",
+    "https://skillbridge-server-erh4.onrender.com"
   ],
   user: {
     additionalFields: {

@@ -40,6 +40,15 @@ function errorHandler(
         statusCode = 500;
         errorMessage = "Database connection failed."
     }
+    else if (err.name === 'ZodError' || err instanceof Error && 'issues' in err) {
+        statusCode = 400;
+        errorMessage = "Validation Error";
+        const issues = (err as any).issues || [];
+        errorDetails = issues.map((issue: any) => ({
+            path: issue.path.join('.'),
+            message: issue.message
+        }));
+    }
     else if (err instanceof Error) {
         // Handle generic errors (like "Booking not found", "Cancel window expired")
         statusCode = 400;

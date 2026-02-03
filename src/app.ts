@@ -9,17 +9,56 @@ import { TutorRoutes } from "./modules/tutor/tutor.route";
 import { PublicRoutes } from "./modules/public/public.route";
 import { AdminRoutes } from "./modules/admin/admin/admin.route";
 import { CategoryRoutes } from "./modules/admin/category/category.routes";
+import helmet from "helmet";
+import morgan from "morgan";
+import hpp from "hpp";
+import { rateLimit } from "express-rate-limit";
 
 const app: Application = express();
 
+// Security Headers
+app.use(helmet());
+
+// Logging
+if (process.env.NODE_ENV === 'development') {
+    app.use(morgan('dev'));
+} else {
+    app.use(morgan('combined'));
+}
+
+// Rate Limiting
+const limiter = rateLimit({
+	windowMs: 15 * 60 * 1000, // 15 minutes
+	limit: 100, // Limit each IP to 100 requests per `window` (here, per 15 minutes).
+	standardHeaders: 'draft-7', // draft-6: `RateLimit-*` headers; draft-7: combined `RateLimit` header
+	legacyHeaders: false, // Disable the `X-RateLimit-*` headers.
+    message: {
+        success: false,
+        message: "Too many requests from this IP, please try again after 15 minutes"
+    }
+});
+
+// Apply rate limiter to all routes for production, or just auth/sensitive routes
+if (process.env.NODE_ENV === 'production') {
+    app.use(limiter);
+}
+
 app.use(cors({
-    origin: process.env.APP_URL || "http://localhost:3000", // client side url
+    origin: process.env.APP_URL ? [process.env.APP_URL] : ["http://localhost:3000"],
     credentials: true
 }))
 
-app.use(express.json());
+app.use(express.json({ limit: '10kb' })); // Protection against large body DoS
+app.use(hpp()); // Protection against HTTP Parameter Pollution
 
 app.all("/api/auth/*splat", toNodeHandler(auth));
+
+app.get("/get-session", async (req, res) => {
+    const session = await auth.api.getSession({
+        headers: req.headers as any
+    });
+    res.json(session);
+});
 
 app.use("/api/public", PublicRoutes);
 app.use("/api/student", StudentRoutes);
