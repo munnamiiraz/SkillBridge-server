@@ -10,14 +10,54 @@ const transporter = nodemailer.createTransport({
   auth: {
     user: process.env.APP_USER,
     pass: process.env.APP_PASS,
-  }, 
+  },
 });
 
 export const auth = betterAuth({
+  secret: process.env.BETTER_AUTH_SECRET,
+  baseURL: process.env.BETTER_AUTH_URL,
+  session: {
+    cookieCache: {
+      enabled: true,
+      maxAge: 60 * 60 * 24 * 7 // 7 days
+    }
+  },
+  advanced: {
+    cookiePrefix: "better-auth",
+    useSecureCookies: process.env.NODE_ENV === "production",
+    crossSubDomainCookies: {
+      enabled: false,
+    },
+    trustHost: true,
+  },
+  databaseHooks: {
+    user: {
+      create: {
+        before: async (user) => {
+          return {
+            data: {
+              ...user,
+              emailVerified: true,
+            },
+          };
+        },
+      },
+    },
+  },
+  cookies: {
+    sessionToken: {
+      name: "better-auth.session_token",
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
+      maxAge: 60 * 60 * 24 * 7, // 7 days
+      domain: process.env.NODE_ENV === "production" ? undefined : undefined
+    }
+  },
   emailAndPassword: { 
     enabled: true,
     autoSignIn: false,
-    requireEmailVerification: true
+    requireEmailVerification: false
   },
   emailVerification: {
     sendOnSignUp: true,
@@ -26,6 +66,11 @@ export const auth = betterAuth({
       try {
         const verificationUrl = `${process.env.APP_URL}/verify-email?token=${token}`
         console.log(`Sending verification email to ${user.email} with URL: ${verificationUrl}`);
+        
+        // Test transporter connection
+        await transporter.verify();
+        console.log('SMTP connection verified successfully');
+        
       const info = await transporter.sendMail({
       from: '"SkillBridge" <munnamiiraz@gmail.com>',
       to: user.email as string,
@@ -126,21 +171,11 @@ export const auth = betterAuth({
       }
     },
   },
-  socialProviders: {
-    google: { 
-      prompt: "select_account consent",
-      accessType: "offline",
-      clientId: process.env.GOOGLE_CLIENT_ID as string, 
-      clientSecret: process.env.GOOGLE_CLIENT_SECRET as string, 
-    }, 
-
-  },
-
-
   trustedOrigins: [
     process.env.APP_URL || "http://localhost:3000",
     "http://localhost:9000",
-    "https://skillbridge-server-erh4.onrender.com"
+    "https://skillbridge-server-2.onrender.com",
+    process.env.CLIENT_URL || "http://localhost:3000"
   ],
   user: {
     additionalFields: {

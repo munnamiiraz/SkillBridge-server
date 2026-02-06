@@ -6,10 +6,10 @@
   "type": "module",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "dev": "nodemon --watch src --watch .env --ext ts,json --exec tsx src/server.ts",
-    "dev:poll": "nodemon --watch src --watch .env --ext ts,json --legacy-watch --exec tsx src/server.ts",
-    "build": "npm install && prisma generate",
-    "start": "node --import tsx src/server.ts",
+    "dev": "nodemon --watch src --watch .env --ext ts,json --exec tsx src/index.ts",
+    "dev:poll": "nodemon --watch src --watch .env --ext ts,json --legacy-watch --exec tsx src/index.ts",
+    "build": "prisma generate && tsup src/index.ts --format esm --platform node --target node20 --outDir api --external pg-native",
+    "start": "node --import tsx src/index.ts",
     "seed:admin": "tsx src/scripts/seedAdmin.ts",
     "seed": "tsx prisma/seed.ts",
     "postinstall": "prisma generate"
@@ -46,6 +46,7 @@
     "nodemailer": "^7.0.12",
     "pg": "^8.17.2",
     "prisma": "^7.3.0",
+    "tsup": "^8.5.1",
     "tsx": "^4.21.0",
     "typescript": "^5.9.3",
     "zod": "^3.24.1"

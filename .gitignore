@@ -1,6 +1,7 @@
 node_modules
 # Keep environment variables out of version control
-.env
+.env*
+.env.*
 
 /src/generated/prisma
 -client
@@ -11,3 +12,4 @@ node_modules
 # Keep IDE specific files out of version control
 .idea
 .vscode
+.vercel

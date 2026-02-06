@@ -44,8 +44,25 @@ if (process.env.NODE_ENV === 'production') {
 }
 
 app.use(cors({
-    origin: process.env.APP_URL ? [process.env.APP_URL] : ["http://localhost:3000"],
-    credentials: true
+    origin: function (origin, callback) {
+        const allowedOrigins = process.env.NODE_ENV === 'production' 
+            ? [process.env.APP_URL, process.env.CLIENT_URL] 
+            : ["http://localhost:3000", "http://localhost:3001"];
+        
+        // Allow requests with no origin (like mobile apps or curl requests)
+        if (!origin) return callback(null, true);
+        
+        if (allowedOrigins.includes(origin)) {
+            return callback(null, true);
+        }
+        
+        const msg = 'The CORS policy for this site does not allow access from the specified Origin.';
+        return callback(new Error(msg), false);
+    },
+    credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'Cookie'],
+    exposedHeaders: ['Set-Cookie']
 }))
 
 app.use(express.json({ limit: '10kb' })); // Protection against large body DoS

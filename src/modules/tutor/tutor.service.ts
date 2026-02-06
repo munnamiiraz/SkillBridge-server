@@ -469,7 +469,6 @@ const updateBookingStatus = async (userId: string, bookingId: string, data: { st
       tutorProfileId: tutorProfile.id
     }
   });
-  console.log("hi");
 
   if (!booking) {
     throw new Error("Booking not found");
@@ -483,9 +482,6 @@ const updateBookingStatus = async (userId: string, bookingId: string, data: { st
     throw new Error("Cannot update cancelled booking");
   }
   
-  console.log(bookingId);
-  
-
   return await prisma.booking.update({
     where: { id: bookingId },
     data: {
