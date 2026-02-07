@@ -111,14 +111,14 @@ const getAvailabilitySlots = async (userId: string, weekStartDate?: string) => {
     const lastRange = ranges[ranges.length - 1];
     
     // If this slot is consecutive with the last one AND has the same isBooked status, extend the range
-    if (lastRange && lastRange.endTime === s.startTime && lastRange.isBooked === s.isBooked) {
+    if (lastRange && lastRange.endTime === s.startTime && (lastRange as any).isBooked === (s as any).isBooked) {
       lastRange.endTime = s.endTime;
     } else {
       // Otherwise, start a new range
       ranges.push({
         startTime: s.startTime,
         endTime: s.endTime,
-        isBooked: s.isBooked
+        isBooked: (s as any).isBooked
       });
     }
   }
@@ -152,7 +152,7 @@ const createProfile = async (userId: string, data: CreateTutorProfileInput) => {
   const validatedData = createTutorProfileSchema.parse(data);
   
   // Use transaction to ensure everything is created correctly
-  const result = await prisma.$transaction(async (tx) => {
+  const result = await prisma.$transaction(async (tx: any) => {
     // 1. Create the tutor profile
     const profile = await tx.tutor_profile.create({
       data: {
@@ -602,7 +602,7 @@ export const updateAvailabilitySlots = async (
   }
 
   // ---------- transaction: delete non-booked, then insert these exact 1-hour chunks ----------
-  const createdAndExisting = await prisma.$transaction(async (tx) => {
+  const createdAndExisting = await prisma.$transaction(async (tx: any) => {
     // remove all non-booked slots in the week for this tutor
     await tx.availability_slot.deleteMany({
       where: {
@@ -648,7 +648,7 @@ export const updateAvailabilitySlots = async (
 
   // ---------- group consecutive DB rows for response (this does NOT affect DB) ----------
   const grouped: Record<string, { startTime: string; endTime: string }[]> = {};
-  createdAndExisting.forEach(s => {
+  createdAndExisting.forEach((s: any) => {
     if (!s.specificDate) return;
     const dateKey = s.specificDate.toISOString().slice(0, 10);
     grouped[dateKey] ??= [];

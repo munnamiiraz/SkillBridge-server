@@ -32,7 +32,7 @@ const createCategory = async (data: CreateCategoryInput) => {
       name: validatedData.name,
       description: validatedData.description ?? null,
       status: validatedData.status || "ACTIVE"
-    },
+    } as any,
     include: {
       subject: true,
       _count: {
@@ -227,7 +227,7 @@ const createSubject = async (data: CreateSubjectInput) => {
       id: randomUUID(),
       name: validatedData.name,
       categoryId: validatedData.categoryId
-    },
+    } as any,
     include: {
       category: true,
       _count: {

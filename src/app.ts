@@ -1,30 +1,24 @@
 import express, { Application } from "express";
 import { toNodeHandler } from "better-auth/node";
-import { auth } from "./lib/auth";
+import { auth } from "./lib/auth.js";
 import cors from 'cors';
-import errorHandler from "./middleware/globalErrorHandler";
-import { notFound } from "./middleware/notFound";
-import { StudentRoutes } from "./modules/student/student.route";
-import { TutorRoutes } from "./modules/tutor/tutor.route";
-import { PublicRoutes } from "./modules/public/public.route";
-import { AdminRoutes } from "./modules/admin/admin/admin.route";
-import { CategoryRoutes } from "./modules/admin/category/category.routes";
+import errorHandler from "./middleware/globalErrorHandler.js";
+import { notFound } from "./middleware/notFound.js";
+import { StudentRoutes } from "./modules/student/student.route.js";
+import { TutorRoutes } from "./modules/tutor/tutor.route.js";
+import { PublicRoutes } from "./modules/public/public.route.js";
+import { AdminRoutes } from "./modules/admin/admin/admin.route.js";
+import { CategoryRoutes } from "./modules/admin/category/category.routes.js";
 import helmet from "helmet";
-import morgan from "morgan";
 import hpp from "hpp";
 import { rateLimit } from "express-rate-limit";
 
 const app: Application = express();
+app.set("trust proxy", true);
+
 
 // Security Headers
 app.use(helmet());
-
-// Logging
-if (process.env.NODE_ENV === 'development') {
-    app.use(morgan('dev'));
-} else {
-    app.use(morgan('combined'));
-}
 
 // Rate Limiting
 const limiter = rateLimit({

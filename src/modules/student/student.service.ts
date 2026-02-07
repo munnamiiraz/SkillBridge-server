@@ -107,7 +107,7 @@ const createReview = async (
   }
 
   // Create review and update tutor stats in a transaction
-  const result = await prisma.$transaction(async (tx) => {
+  const result = await prisma.$transaction(async (tx: any) => {
     // Create the review
     const review = await tx.review.create({
       data: createData,
@@ -143,7 +143,7 @@ const createReview = async (
 
     const totalReviews = allReviews.length;
     const averageRating = totalReviews > 0
-      ? allReviews.reduce((sum, r) => sum + r.rating, 0) / totalReviews
+      ? allReviews.reduce((sum: number , r: any) => sum + r.rating, 0) / totalReviews
       : 0;
 
     // Update tutor profile with new stats
@@ -224,7 +224,7 @@ const createBooking = async (studentId: string, data: CreateBookingInput): Promi
         specificDate: scheduledDateOnly,
         startTime: timeString,
         isBooked: false
-      }
+      } as any
     });
     
     // console.log("Is bookes: ", timeString)
@@ -257,7 +257,7 @@ const createBooking = async (studentId: string, data: CreateBookingInput): Promi
     
     
     // Create booking and mark slot as booked in a transaction
-    const result = await prisma.$transaction(async (tx) => {
+    const result = await prisma.$transaction(async (tx: any) => {
       // Mark the availability slot as booked ONLY if it is NOT recurring
       if (availabilitySlot && !availabilitySlot.isRecurring) {
         await tx.availability_slot.update({
@@ -417,9 +417,7 @@ const cancelBooking = async (studentId: string, bookingId: string): Promise<Book
       id: bookingId,
       studentId: studentId
     },
-    include: {
-      availability_slot: true
-    }
+    include: {}
   });
 
   if (!booking) {
@@ -436,11 +434,12 @@ const cancelBooking = async (studentId: string, bookingId: string): Promise<Book
   }
 
   // Cancel booking and free up the slot in a transaction
-  return await prisma.$transaction(async (tx) => {
+  return await prisma.$transaction(async (tx: any) => {
     // Free up the availability slot if it exists and is NOT recurring
-    if (booking.availabilitySlotId && booking.availability_slot && !booking.availability_slot.isRecurring) {
+    const bookingAny = booking as any;
+    if (bookingAny.availabilitySlotId && bookingAny.availability_slot && !bookingAny.availability_slot.isRecurring) {
       await tx.availability_slot.update({
-        where: { id: booking.availabilitySlotId },
+        where: { id: bookingAny.availabilitySlotId },
         data: { isBooked: false }
       });
     }

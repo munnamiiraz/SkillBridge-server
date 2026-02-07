@@ -1,7 +1,7 @@
 import {
   prisma,
   prismaNamespace_exports
-} from "./chunk-U675ACJH.js";
+} from "./chunk-UY5ORJKW.js";
 
 // src/app.ts
 import express from "express";
@@ -10,17 +10,7 @@ import { toNodeHandler } from "better-auth/node";
 // src/lib/auth.ts
 import { betterAuth } from "better-auth";
 import { prismaAdapter } from "better-auth/adapters/prisma";
-import nodemailer from "nodemailer";
-var transporter = nodemailer.createTransport({
-  host: "smtp.gmail.com",
-  port: 587,
-  secure: false,
-  // Use true for port 465, false for port 587
-  auth: {
-    user: process.env.APP_USER,
-    pass: process.env.APP_PASS
-  }
-});
+var isProduction = process.env.NODE_ENV === "production";
 var auth = betterAuth({
   secret: process.env.BETTER_AUTH_SECRET,
   baseURL: process.env.BETTER_AUTH_URL,
@@ -32,12 +22,22 @@ var auth = betterAuth({
     }
   },
   advanced: {
-    cookiePrefix: "better-auth",
-    useSecureCookies: process.env.NODE_ENV === "production",
-    crossSubDomainCookies: {
-      enabled: false
+    defaultCookieAttributes: {
+      sameSite: isProduction ? "none" : "lax",
+      secure: isProduction,
+      // secure in production
+      httpOnly: true,
+      path: "/"
     },
-    trustHost: true
+    trustProxy: true,
+    cookies: {
+      state: {
+        attributes: {
+          sameSite: "none",
+          secure: true
+        }
+      }
+    }
   },
   databaseHooks: {
     user: {
@@ -53,143 +53,15 @@ var auth = betterAuth({
       }
     }
   },
-  cookies: {
-    sessionToken: {
-      name: "better-auth.session_token",
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
-      maxAge: 60 * 60 * 24 * 7,
-      // 7 days
-      domain: process.env.NODE_ENV === "production" ? void 0 : void 0
-    }
-  },
   emailAndPassword: {
     enabled: true,
-    autoSignIn: false,
+    autoSignIn: true,
     requireEmailVerification: false
-  },
-  emailVerification: {
-    sendOnSignUp: true,
-    autoSignInAfterVerification: true,
-    sendVerificationEmail: async ({ user, url, token }, request) => {
-      try {
-        const verificationUrl = `${process.env.APP_URL}/verify-email?token=${token}`;
-        console.log(`Sending verification email to ${user.email} with URL: ${verificationUrl}`);
-        await transporter.verify();
-        console.log("SMTP connection verified successfully");
-        const info = await transporter.sendMail({
-          from: '"SkillBridge" <munnamiiraz@gmail.com>',
-          to: user.email,
-          subject: "Please verify your email",
-          text: `Hello ${user.name},
-
-Thanks for joining SkillBridge! Please confirm your email address to activate your account by clicking on the following link: ${verificationUrl}
-
-If you didn\u2019t create an account, you can safely ignore this email.
-
-\u2014
-SkillBridge Team`,
-          // Plain-text version of the message
-          html: `<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="UTF-8" />
-  <title>Email Verification</title>
-</head>
-<body style="margin:0; padding:0; background:#f6f8fb; font-family: Arial, Helvetica, sans-serif;">
-
-  <table width="100%" cellpadding="0" cellspacing="0">
-    <tr>
-      <td align="center" style="padding:40px 10px;">
-
-        <table width="100%" max-width="520" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:12px;box-shadow:0 4px 12px rgba(0,0,0,0.08);padding:40px;max-width:520px;">
-
-          <!-- Logo / Title -->
-          <tr>
-            <td align="center">
-              <h1 style="margin:0;color:#2563eb;font-size:28px;">SkillBridge</h1>
-            </td>
-          </tr>
-
-          <!-- Divider -->
-          <tr>
-            <td style="padding:20px 0;border-bottom:1px solid #e5e7eb;"></td>
-          </tr>
-
-          <!-- Content -->
-          <tr>
-            <td style="padding-top:30px;color:#111827;font-size:16px;line-height:1.6;">
-              <p>Hello ${user.name}\u{1F44B},</p>
-
-              <p>
-                Thanks for joining <strong>SkillBridge</strong>!  
-                Please confirm your email address to activate your account.
-              </p>
-
-              <!-- Button -->
-              <div style="text-align:center;margin:35px 0;">
-                <a href="${verificationUrl}"
-                  style="
-                    background:#2563eb;
-                    color:#ffffff;
-                    padding:14px 28px;
-                    border-radius:8px;
-                    text-decoration:none;
-                    font-weight:600;
-                    display:inline-block;
-                  ">
-                  Verify Email Address
-                </a>
-              </div>
-
-              <p>
-                If the button doesn\u2019t work, copy and paste this link into your browser:
-              </p>
-
-              <p style="word-break:break-all;color:#2563eb;">
-                ${verificationUrl}
-              </p>
-
-              <p>
-                If you didn\u2019t create an account, you can safely ignore this email.
-              </p>
-
-              <p style="margin-top:30px;">
-                \u2014 <br />
-                <strong>SkillBridge Team</strong>
-              </p>
-            </td>
-          </tr>
-
-        </table>
-
-        <!-- Footer -->
-        <p style="margin-top:20px;font-size:12px;color:#6b7280;">
-          \xA9 ${(/* @__PURE__ */ new Date()).getFullYear()} SkillBridge. All rights reserved.
-        </p>
-
-      </td>
-    </tr>
-  </table>
-
-</body>
-</html>
-`
-        });
-        console.log("Message sent:", info.messageId);
-      } catch (error) {
-        console.log(error);
-        throw error;
-      }
-    }
   },
   trustedOrigins: [
     process.env.APP_URL || "http://localhost:3000",
     "http://localhost:9000",
-    "https://skillbridge-server-2.onrender.com",
-    "https://your-frontend-domain.com"
-    // Add your actual production frontend domain
+    "https://skillbridge-server-2.onrender.com"
   ],
   user: {
     additionalFields: {
@@ -690,9 +562,7 @@ var cancelBooking = async (studentId, bookingId) => {
       id: bookingId,
       studentId
     },
-    include: {
-      availability_slot: true
-    }
+    include: {}
   });
   if (!booking) {
     throw new Error("Booking not found");
@@ -704,9 +574,10 @@ var cancelBooking = async (studentId, bookingId) => {
     throw new Error("Cannot cancel a session that has already started or passed");
   }
   return await prisma.$transaction(async (tx) => {
-    if (booking.availabilitySlotId && booking.availability_slot && !booking.availability_slot.isRecurring) {
+    const bookingAny = booking;
+    if (bookingAny.availabilitySlotId && bookingAny.availability_slot && !bookingAny.availability_slot.isRecurring) {
       await tx.availability_slot.update({
-        where: { id: booking.availabilitySlotId },
+        where: { id: bookingAny.availabilitySlotId },
         data: { isBooked: false }
       });
     }
@@ -1531,7 +1402,7 @@ var createProfile2 = async (req, res, next) => {
         message: "User not authenticated"
       });
     }
-    const { prisma: prisma2 } = await import("./prisma-BY3BFJ25.js");
+    const { prisma: prisma2 } = await import("./prisma-2K7BFZRA.js");
     const existingProfile = await prisma2.tutor_profile.findUnique({
       where: { userId: req.user.id }
     });
@@ -2030,9 +1901,7 @@ var PublicService = class {
   }
   static async getAllCategories() {
     return await prisma.category.findMany({
-      where: {
-        status: "ACTIVE"
-      },
+      where: {},
       include: {
         subject: {
           orderBy: {
@@ -2717,9 +2586,10 @@ var cancelBooking3 = async (bookingId, data) => {
         notes: data.reason ? `Cancelled by admin: ${data.reason}` : "Cancelled by admin"
       }
     });
-    if (booking.availability_slot) {
+    const bookingAny = booking;
+    if (bookingAny.availability_slot) {
       await tx.availability_slot.update({
-        where: { id: booking.availability_slot.id },
+        where: { id: bookingAny.availability_slot.id },
         data: { isBooked: false }
       });
     }
@@ -3427,16 +3297,11 @@ var CategoryRoutes = router5;
 
 // src/app.ts
 import helmet from "helmet";
-import morgan from "morgan";
 import hpp from "hpp";
 import { rateLimit } from "express-rate-limit";
 var app = express();
+app.set("trust proxy", true);
 app.use(helmet());
-if (process.env.NODE_ENV === "development") {
-  app.use(morgan("dev"));
-} else {
-  app.use(morgan("combined"));
-}
 var limiter = rateLimit({
   windowMs: 15 * 60 * 1e3,
   // 15 minutes
@@ -3456,7 +3321,7 @@ if (process.env.NODE_ENV === "production") {
 }
 app.use(cors({
   origin: function(origin, callback) {
-    const allowedOrigins = process.env.NODE_ENV === "production" ? [process.env.APP_URL, "https://your-frontend-domain.com"] : ["http://localhost:3000", "http://localhost:3001"];
+    const allowedOrigins = process.env.NODE_ENV === "production" ? [process.env.APP_URL, process.env.CLIENT_URL] : ["http://localhost:3000", "http://localhost:3001"];
     if (!origin) return callback(null, true);
     if (allowedOrigins.includes(origin)) {
       return callback(null, true);
@@ -3490,19 +3355,21 @@ app.use(notFound);
 app.use(globalErrorHandler_default);
 var app_default = app;
 
-// src/server.ts
-var PORT = process.env.PORT || 9e3;
-async function main() {
+// src/index.ts
+var PORT = process.env.PORT || 1e4;
+async function bootstrap() {
   try {
-    await prisma.$connect();
     console.log("Connected to the database successfully.");
     app_default.listen(PORT, () => {
-      console.log(`Server is running on http://localhost:${PORT}`);
+      console.log(`Server is running on port ${PORT}`);
     });
   } catch (error) {
-    console.error("An error occurred:", error);
-    await prisma.$disconnect();
+    console.error("An error occurred during bootstrap:", error);
     process.exit(1);
   }
 }
-main();
+bootstrap();
+var index_default = app_default;
+export {
+  index_default as default
+};

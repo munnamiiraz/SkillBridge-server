@@ -29,6 +29,7 @@ async function seedAdmin() {
         role: "ADMIN",
         emailVerified: true,
         phone: "N/A",
+        updatedAt: new Date(),
         account: {
           create: {
             id: accountId,
