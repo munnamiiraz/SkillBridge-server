@@ -116,7 +116,7 @@ export const updateAvailabilitySlots = async (
     // Update the availability slots
     const result = await TutorService.updateAvailabilitySlots(
       req.user!.id,
-      validatedSlots
+      validatedSlots as any
     );
 
     res.status(200).json({

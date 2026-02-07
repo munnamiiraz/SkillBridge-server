@@ -341,9 +341,7 @@ export class PublicService {
 
   static async getAllCategories() {
     return await prisma.category.findMany({
-      where: {
-        status: "ACTIVE"
-      },
+      where: {},
       include: {
         subject: {
           orderBy: {
@@ -434,14 +432,14 @@ export class PublicService {
       const lastRange = ranges[ranges.length - 1];
       
       // If this slot is consecutive with the last one AND has the same isBooked status, extend the range
-      if (lastRange && lastRange.endTime === s.startTime && lastRange.isBooked === s.isBooked) {
+      if (lastRange && lastRange.endTime === s.startTime && (lastRange as any).isBooked === (s as any).isBooked) {
         lastRange.endTime = s.endTime;
       } else {
         // Otherwise, start a new range
         ranges.push({
           startTime: s.startTime,
           endTime: s.endTime,
-          isBooked: s.isBooked
+          isBooked: (s as any).isBooked
         });
       }
     }

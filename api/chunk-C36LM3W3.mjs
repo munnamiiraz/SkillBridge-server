@@ -266,10 +266,8 @@ globalThis["__dirname"] = path.dirname(fileURLToPath(import.meta.url));
 var PrismaClient = getPrismaClientClass();
 
 // src/lib/prisma.ts
-import pg from "pg";
 var connectionString = `${process.env.DATABASE_URL}`;
-var pool = new pg.Pool({ connectionString });
-var adapter = new PrismaPg(pool);
+var adapter = new PrismaPg({ connectionString });
 var prisma = new PrismaClient({ adapter });
 
 export {

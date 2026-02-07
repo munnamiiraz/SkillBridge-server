@@ -1,4 +1,5 @@
 import { prisma } from "../../../lib/prisma";
+import { z } from "zod";
 import { adminLoginSchema, AdminLoginInput, updateUserStatusSchema, UpdateUserStatusInput, createCategorySchema, CreateCategoryInput, updateCategorySchema, UpdateCategoryInput } from "./admin.validation";
 import { auth } from "../../../lib/auth";
 import paginationSortingHelper from "../../../helpers/paginationSortingHelper";
@@ -308,7 +309,7 @@ const cancelBooking = async (bookingId: string, data: { reason?: string; refundA
     throw new Error("Booking is already cancelled");
   }
   
-  return await prisma.$transaction(async (tx) => {
+  return await prisma.$transaction(async (tx: any) => {
     // Update booking status
     const updatedBooking = await tx.booking.update({
       where: { id: bookingId },
@@ -319,9 +320,10 @@ const cancelBooking = async (bookingId: string, data: { reason?: string; refundA
     });
     
     // Free up the availability slot
-    if (booking.availability_slot) {
+    const bookingAny = booking as any;
+    if (bookingAny.availability_slot) {
       await tx.availability_slot.update({
-        where: { id: booking.availability_slot.id },
+        where: { id: bookingAny.availability_slot.id },
         data: { isBooked: false }
       });
     }

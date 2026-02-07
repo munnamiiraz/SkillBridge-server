@@ -10,21 +10,15 @@ import { PublicRoutes } from "./modules/public/public.route";
 import { AdminRoutes } from "./modules/admin/admin/admin.route";
 import { CategoryRoutes } from "./modules/admin/category/category.routes";
 import helmet from "helmet";
-import morgan from "morgan";
 import hpp from "hpp";
 import { rateLimit } from "express-rate-limit";
 
 const app: Application = express();
+app.set("trust proxy", true);
+
 
 // Security Headers
 app.use(helmet());
-
-// Logging
-if (process.env.NODE_ENV === 'development') {
-    app.use(morgan('dev'));
-} else {
-    app.use(morgan('combined'));
-}
 
 // Rate Limiting
 const limiter = rateLimit({
