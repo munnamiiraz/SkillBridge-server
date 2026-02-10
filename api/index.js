@@ -14,6 +14,7 @@ var isProduction = process.env.NODE_ENV === "production";
 var auth = betterAuth({
   secret: process.env.BETTER_AUTH_SECRET,
   baseURL: process.env.BETTER_AUTH_URL,
+  // ✅ SESSION CONFIG (version-safe)
   session: {
     cookieCache: {
       enabled: true,
@@ -21,35 +22,54 @@ var auth = betterAuth({
       // 7 days
     }
   },
+  user: {
+    additionalFields: {
+      role: {
+        type: "string",
+        default: "STUDENT"
+      },
+      phone: {
+        type: "string",
+        default: null
+      },
+      status: {
+        type: "string",
+        default: "ACTIVE"
+      }
+    }
+  },
+  // ✅ SESSION CALLBACK — THIS IS THE KEY PART
+  callbacks: {
+    session: async ({ session, user }) => {
+      if (user && session.user) {
+        session.user.role = user.role;
+        session.user.phone = user.phone;
+        session.user.status = user.status;
+      }
+      return session;
+    }
+  },
+  // ✅ COOKIE / SECURITY CONFIG (NO INVALID PROPS)
   advanced: {
     defaultCookieAttributes: {
       sameSite: isProduction ? "none" : "lax",
       secure: isProduction,
-      // secure in production
       httpOnly: true,
       path: "/"
-    },
-    trustProxy: true,
-    cookies: {
-      state: {
-        attributes: {
-          sameSite: "none",
-          secure: true
-        }
-      }
     }
   },
+  // ✅ HANDLE DEFAULT VALUES PROPERLY
   databaseHooks: {
     user: {
       create: {
-        before: async (user) => {
-          return {
-            data: {
-              ...user,
-              emailVerified: true
-            }
-          };
-        }
+        before: async (user) => ({
+          data: {
+            ...user,
+            role: user.role ?? "STUDENT",
+            status: user.status ?? "ACTIVE",
+            emailVerified: true
+          }
+        })
       }
     }
   },
@@ -59,28 +79,9 @@ var auth = betterAuth({
     requireEmailVerification: false
   },
   trustedOrigins: [
-    process.env.APP_URL || "http://localhost:3000",
-    "http://localhost:9000",
-    "https://skillbridge-server-2.onrender.com"
+    process.env.APP_URL || "http://localhost:3001",
+    "http://localhost:9000"
   ],
-  user: {
-    additionalFields: {
-      role: {
-        type: "string",
-        default: "STUDENT",
-        required: true
-      },
-      phone: {
-        type: "string",
-        required: true
-      },
-      status: {
-        type: "string",
-        default: "ACTIVE",
-        required: false
-      }
-    }
-  },
   database: prismaAdapter(prisma, {
     provider: "postgresql"
   })
@@ -3296,12 +3297,19 @@ router5.delete("/subjects/:subjectId", auth_default("ADMIN" /* ADMIN */), Catego
 var CategoryRoutes = router5;
 
 // src/app.ts
-import helmet from "helmet";
 import hpp from "hpp";
 import { rateLimit } from "express-rate-limit";
 var app = express();
-app.set("trust proxy", true);
-app.use(helmet());
+app.set("trust proxy", 1);
+app.use(cors({
+  origin: true,
+  // Allow all origins in development
+  credentials: true,
+  methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
+  allowedHeaders: ["Content-Type", "Authorization", "Cookie", "X-Requested-With"],
+  exposedHeaders: ["Set-Cookie"]
+}));
+app.options("{*path}", cors());
 var limiter = rateLimit({
   windowMs: 15 * 60 * 1e3,
   // 15 minutes
@@ -3319,29 +3327,40 @@ var limiter = rateLimit({
 if (process.env.NODE_ENV === "production") {
   app.use(limiter);
 }
-app.use(cors({
-  origin: function(origin, callback) {
-    const allowedOrigins = process.env.NODE_ENV === "production" ? [process.env.APP_URL, process.env.CLIENT_URL] : ["http://localhost:3000", "http://localhost:3001"];
-    if (!origin) return callback(null, true);
-    if (allowedOrigins.includes(origin)) {
-      return callback(null, true);
-    }
-    const msg = "The CORS policy for this site does not allow access from the specified Origin.";
-    return callback(new Error(msg), false);
-  },
-  credentials: true,
-  methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
-  allowedHeaders: ["Content-Type", "Authorization", "Cookie"],
-  exposedHeaders: ["Set-Cookie"]
-}));
 app.use(express.json({ limit: "10kb" }));
 app.use(hpp());
-app.all("/api/auth/*splat", toNodeHandler(auth));
+app.all("/api/auth/*splat", (req, res, next) => {
+  console.log("Auth request:", req.method, req.url, "Origin:", req.headers.origin);
+  next();
+}, toNodeHandler(auth));
 app.get("/get-session", async (req, res) => {
-  const session = await auth.api.getSession({
-    headers: req.headers
-  });
-  res.json(session);
+  try {
+    const session = await auth.api.getSession({
+      headers: req.headers
+    });
+    console.log("=== SESSION DEBUG ===");
+    console.log("Full session:", JSON.stringify(session, null, 2));
+    let dbUser = null;
+    if (session?.user?.id) {
+      dbUser = await prisma.user.findUnique({
+        where: { id: session.user.id },
+        select: { id: true, email: true, name: true, role: true, status: true, phone: true }
+      });
+      console.log("DB User:", JSON.stringify(dbUser, null, 2));
+    }
+    if (session?.user && dbUser) {
+      session.user = {
+        ...session.user,
+        role: dbUser.role,
+        status: dbUser.status,
+        phone: dbUser.phone
+      };
+    }
+    res.json(session);
+  } catch (error) {
+    console.error("Session error:", error);
+    res.status(500).json({ error: "Failed to get session" });
+  }
 });
 app.use("/api/public", PublicRoutes);
 app.use("/api/student", StudentRoutes);
@@ -3350,6 +3369,9 @@ app.use("/api/admin", AdminRoutes);
 app.use("/api/admin", CategoryRoutes);
 app.get("/", (req, res) => {
   res.send("Hello, World!");
+});
+app.get("/health", (req, res) => {
+  res.status(200).json({ status: "ok", message: "Server is healthy" });
 });
 app.use(notFound);
 app.use(globalErrorHandler_default);

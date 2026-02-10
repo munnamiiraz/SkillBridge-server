@@ -3,8 +3,7 @@ import { StudentService } from "./student.service";
 
 const updateProfile = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const { name, image, address, phone } = req.body;
-    const result = await StudentService.updateProfile(req.user!.id, { name, image, address, phone });
+    const result = await StudentService.updateProfile(req.user!.id, req.body);
     
     res.status(200).json({
       success: true,

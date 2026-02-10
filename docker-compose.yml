@@ -1,0 +1,45 @@
+version: '3.8'
+
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:15-alpine
+    container_name: skillbridge-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: skillbridge
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: password
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - skillbridge-network
+
+  # Node.js Application
+  app:
+    build: .
+    container_name: skillbridge-app
+    restart: unless-stopped
+    ports:
+      - "10000:10000"
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: postgresql://postgres:password@postgres:5432/skillbridge
+      BETTER_AUTH_SECRET: your-secret-key-here
+      BETTER_AUTH_URL: http://localhost:10000
+    depends_on:
+      - postgres
+    networks:
+      - skillbridge-network
+    volumes:
+      - .:/app
+      - /app/node_modules
+
+volumes:
+  postgres_data:
+
+networks:
+  skillbridge-network:
+    driver: bridge

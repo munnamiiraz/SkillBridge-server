@@ -194,30 +194,56 @@ const createProfile = async (userId: string, data: CreateTutorProfileInput) => {
 const updateProfile = async (userId: string, data: UpdateTutorProfileInput) => {
   const validatedData = updateTutorProfileSchema.parse(data);
   
-  const updateData: any = {};
-  
-  if (validatedData.bio !== undefined) {
-    updateData.bio = validatedData.bio;
-  }
-  if (validatedData.headline !== undefined) {
-    updateData.headline = validatedData.headline;
-  }
-  if (validatedData.hourlyRate !== undefined) {
-    updateData.hourlyRate = validatedData.hourlyRate;
-  }
-  if (validatedData.experience !== undefined) {
-    updateData.experience = validatedData.experience;
-  }
-  if (validatedData.education !== undefined) {
-    updateData.education = validatedData.education;
-  }
-  if (validatedData.isAvailable !== undefined) {
-    updateData.isAvailable = validatedData.isAvailable;
-  }
-  
-  return await prisma.tutor_profile.update({
-    where: { userId },
-    data: updateData
+  return await prisma.$transaction(async (tx: any) => {
+    // 1. Separate user fields from profile fields
+    const userUpdateData: any = {};
+    const profileUpdateData: any = {};
+    
+    // User fields
+    if (validatedData.name !== undefined) userUpdateData.name = validatedData.name;
+    if (validatedData.image !== undefined) userUpdateData.image = validatedData.image;
+    if (validatedData.phone !== undefined) userUpdateData.phone = validatedData.phone;
+    if (validatedData.address !== undefined) userUpdateData.address = validatedData.address;
+    
+    // Profile fields
+    if (validatedData.bio !== undefined) profileUpdateData.bio = validatedData.bio;
+    if (validatedData.headline !== undefined) profileUpdateData.headline = validatedData.headline;
+    if (validatedData.hourlyRate !== undefined) profileUpdateData.hourlyRate = validatedData.hourlyRate;
+    if (validatedData.experience !== undefined) profileUpdateData.experience = validatedData.experience;
+    if (validatedData.education !== undefined) profileUpdateData.education = validatedData.education;
+    if (validatedData.isAvailable !== undefined) profileUpdateData.isAvailable = validatedData.isAvailable;
+    if (validatedData.address !== undefined) profileUpdateData.address = validatedData.address;
+    
+    // 2. Update User if needed
+    if (Object.keys(userUpdateData).length > 0) {
+      await tx.user.update({
+        where: { id: userId },
+        data: userUpdateData
+      });
+    }
+    
+    // 3. Update Tutor Profile if needed
+    if (Object.keys(profileUpdateData).length > 0) {
+      return await tx.tutor_profile.update({
+        where: { userId },
+        data: profileUpdateData,
+        include: {
+          user: {
+            select: { id: true, name: true, email: true, image: true, role: true }
+          }
+        }
+      });
+    }
+    
+    // If only user updated, return the latest profile
+    return await tx.tutor_profile.findUnique({
+      where: { userId },
+      include: {
+        user: {
+          select: { id: true, name: true, email: true, image: true, role: true }
+        }
+      }
+    });
   });
 };
 

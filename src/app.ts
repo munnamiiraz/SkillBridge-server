@@ -1,6 +1,7 @@
 import express, { Application } from "express";
 import { toNodeHandler } from "better-auth/node";
 import { auth } from "./lib/auth.js";
+import { prisma } from "./lib/prisma.js";
 import cors from 'cors';
 import errorHandler from "./middleware/globalErrorHandler.js";
 import { notFound } from "./middleware/notFound.js";
@@ -14,16 +15,23 @@ import hpp from "hpp";
 import { rateLimit } from "express-rate-limit";
 
 const app: Application = express();
-app.set("trust proxy", true);
+app.set("trust proxy", 1);
 
+// Simple CORS configuration for development
+app.use(cors({
+    origin: true, // Allow all origins in development
+    credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'Cookie', 'X-Requested-With'],
+    exposedHeaders: ['Set-Cookie']
+}));
 
-// Security Headers
-app.use(helmet());
+// Handle preflight requests - use {*path} syntax for Express 5+ compatibility
+app.options('{*path}', cors());
 
-// Rate Limiting
 const limiter = rateLimit({
-	windowMs: 15 * 60 * 1000, // 15 minutes
-	limit: 100, // Limit each IP to 100 requests per `window` (here, per 15 minutes).
+	windowMs: 1 * 60 * 1000, // 1 minutes
+	limit: 1000, // Limit each IP to 1000 requests per `window` (here, per 15 minutes).
 	standardHeaders: 'draft-7', // draft-6: `RateLimit-*` headers; draft-7: combined `RateLimit` header
 	legacyHeaders: false, // Disable the `X-RateLimit-*` headers.
     message: {
@@ -32,43 +40,50 @@ const limiter = rateLimit({
     }
 });
 
-// Apply rate limiter to all routes for production, or just auth/sensitive routes
 if (process.env.NODE_ENV === 'production') {
     app.use(limiter);
 }
 
-app.use(cors({
-    origin: function (origin, callback) {
-        const allowedOrigins = process.env.NODE_ENV === 'production' 
-            ? [process.env.APP_URL, process.env.CLIENT_URL] 
-            : ["http://localhost:3000", "http://localhost:3001"];
-        
-        // Allow requests with no origin (like mobile apps or curl requests)
-        if (!origin) return callback(null, true);
-        
-        if (allowedOrigins.includes(origin)) {
-            return callback(null, true);
-        }
-        
-        const msg = 'The CORS policy for this site does not allow access from the specified Origin.';
-        return callback(new Error(msg), false);
-    },
-    credentials: true,
-    methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization', 'Cookie'],
-    exposedHeaders: ['Set-Cookie']
-}))
+app.use(express.json({ limit: '10kb' })); 
+app.use(hpp()); 
 
-app.use(express.json({ limit: '10kb' })); // Protection against large body DoS
-app.use(hpp()); // Protection against HTTP Parameter Pollution
-
-app.all("/api/auth/*splat", toNodeHandler(auth));
+app.all("/api/auth/*splat", (req, res, next) => {
+    console.log('Auth request:', req.method, req.url, 'Origin:', req.headers.origin);
+    next();
+}, toNodeHandler(auth));
 
 app.get("/get-session", async (req, res) => {
-    const session = await auth.api.getSession({
-        headers: req.headers as any
-    });
-    res.json(session);
+    try {
+        const session = await auth.api.getSession({
+            headers: req.headers as any
+        });
+        
+        console.log("=== SESSION DEBUG ===");
+        console.log("Full session:", JSON.stringify(session, null, 2));
+        
+        // Also fetch user directly from database to compare
+        let dbUser = null;
+        if (session?.user?.id) {
+            dbUser = await prisma.user.findUnique({
+                where: { id: session.user.id },
+                select: { id: true, email: true, name: true, role: true, status: true, phone: true }
+            });
+            console.log("DB User:", JSON.stringify(dbUser, null, 2));
+            
+        }
+        if(session?.user && dbUser){
+            session.user = {
+                ...session.user,
+                role: dbUser.role,
+                status: dbUser.status,
+                phone: dbUser.phone
+            }
+        }
+        res.json(session);
+    } catch (error) {
+        console.error("Session error:", error);
+        res.status(500).json({ error: "Failed to get session" });
+    }
 });
 
 app.use("/api/public", PublicRoutes);
@@ -80,6 +95,11 @@ app.use("/api/admin", CategoryRoutes);
 app.get("/", (req, res) => {
     res.send("Hello, World!");
 });
+
+app.get("/health", (req, res) => {
+    res.status(200).json({ status: "ok", message: "Server is healthy" });
+});
+
 app.use(notFound)
 app.use(errorHandler)
 

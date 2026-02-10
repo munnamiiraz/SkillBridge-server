@@ -11,6 +11,10 @@ export const createTutorProfileSchema = z.object({
 });
 
 export const updateTutorProfileSchema = z.object({
+  name: z.string().min(1, "Name cannot be empty").max(100, "Name too long").optional(),
+  image: z.string().url("Invalid image URL").nullable().optional(),
+  phone: z.string().min(1, "Phone cannot be empty").max(20, "Phone too long").optional(),
+  address: z.string().min(1, "Address cannot be empty").max(500, "Address too long").nullable().optional(),
   bio: z.string().transform(val => val?.trim() || undefined).pipe(
     z.string().min(10, "Bio must be at least 10 characters").max(1000, "Bio too long").optional()
   ).optional(),

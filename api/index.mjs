@@ -60,8 +60,6 @@ var auth = betterAuth({
   },
   trustedOrigins: [
     process.env.APP_URL || "http://localhost:3000",
-    "http://localhost:9000",
-    "https://skillbridge-server-2.onrender.com"
   ],
   user: {
     additionalFields: {
