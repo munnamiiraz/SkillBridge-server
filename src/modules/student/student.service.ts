@@ -46,11 +46,9 @@ const createReview = async (
   studentId: string,
   data: CreateReviewInput
 ): Promise<CreateReviewResponse> => {
-  // Validate input
   
   const validatedData = createReviewSchema.parse(data);
   
-  // Find the booking for this student
   const booking = await prisma.booking.findFirst({
     where: {
       id: validatedData.bookingId,
@@ -206,7 +204,6 @@ const createBooking = async (studentId: string, data: CreateBookingInput): Promi
       throw new Error("This time slot is already booked");
     }
     
-    // Find the availability slot for this booking
     const scheduledDateOnly = new Date(scheduledDate);
     scheduledDateOnly.setUTCHours(0, 0, 0, 0);
     
@@ -215,9 +212,6 @@ const createBooking = async (studentId: string, data: CreateBookingInput): Promi
     const timeString = `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`;
     
 
-    // console.log("Tutor profile: ", validatedData.tutorProfileId)
-    // console.log("Date: ", scheduledDateOnly)
-    // console.log("Time: ", timeString)
     const availabilitySlot = await prisma.availability_slot.findFirst({
       where: {
         tutorProfileId: validatedData.tutorProfileId,
@@ -227,14 +221,12 @@ const createBooking = async (studentId: string, data: CreateBookingInput): Promi
       } as any
     });
     
-    // console.log("Is bookes: ", timeString)
 
     
     if (!availabilitySlot) {
       throw new Error("This time slot is not available");
     }
     
-    // Calculate price based on duration and hourly rate
     const price = (validatedData.duration / 60) * tutorProfile.hourlyRate;
     
     const createBookingData: any = {
@@ -256,9 +248,7 @@ const createBooking = async (studentId: string, data: CreateBookingInput): Promi
     }
     
     
-    // Create booking and mark slot as booked in a transaction
     const result = await prisma.$transaction(async (tx: any) => {
-      // Mark the availability slot as booked ONLY if it is NOT recurring
       if (availabilitySlot && !availabilitySlot.isRecurring) {
         await tx.availability_slot.update({
           where: { id: availabilitySlot.id },
@@ -305,7 +295,22 @@ const getBookings = async (studentId: string, options: BookingPaginationOptions)
   };
 
   if (options.status) {
-    whereClause.status = options.status;
+    if (options.status === 'ONGOING') {
+      // For ONGOING, check if status is explicitly ONGOING or if session is currently happening
+      const now = new Date();
+      whereClause.OR = [
+        { status: 'ONGOING' },
+        {
+          AND: [
+            { status: 'CONFIRMED' },
+            { scheduledAt: { lte: now } },
+            { scheduledAt: { gte: new Date(now.getTime() - 60 * 60000) } } // Within last hour
+          ]
+        }
+      ];
+    } else {
+      whereClause.status = options.status;
+    }
   }
 
   const [bookings, total] = await Promise.all([
@@ -417,7 +422,9 @@ const cancelBooking = async (studentId: string, bookingId: string): Promise<Book
       id: bookingId,
       studentId: studentId
     },
-    include: {}
+    include: {
+      availability_slot: true
+    }
   });
 
   if (!booking) {

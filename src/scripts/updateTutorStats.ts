@@ -4,7 +4,6 @@ async function updateAllTutorStats() {
   console.log("Starting tutor stats update...");
   
   try {
-    // Get all tutor profiles
     const tutorProfiles = await prisma.tutor_profile.findMany({
       select: { id: true }
     });
@@ -50,7 +49,6 @@ async function updateAllTutorStats() {
   }
 }
 
-// Run the script if called directly
 if (require.main === module) {
   updateAllTutorStats();
 }

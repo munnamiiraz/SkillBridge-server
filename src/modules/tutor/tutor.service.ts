@@ -1,4 +1,3 @@
-// tutor.service.ts
 import { prisma } from "../../lib/prisma";
 import { 
   createTutorProfileSchema, 
@@ -63,23 +62,29 @@ const getAvailabilitySlots = async (userId: string, weekStartDate?: string) => {
     throw new Error("Tutor profile not found");
   }
   
-  // If no weekStartDate provided, use the current week's Monday
+  // If no weekStartDate provided, use the current week's Monday in Dhaka timezone
   let startDate: Date;
   if (weekStartDate) {
-    startDate = new Date(weekStartDate);
+    // Parse as UTC midnight to match how specificDate is stored in DB
+    startDate = new Date(weekStartDate + "T00:00:00.000Z");
   } else {
-    const today = new Date();
-    const dayOfWeek = today.getDay();
-    const diff = dayOfWeek === 0 ? -6 : 1 - dayOfWeek; // Adjust to get Monday
-    startDate = new Date(today);
-    startDate.setDate(today.getDate() + diff);
+    const now = new Date();
+    const dhakaOffset = 6 * 60; // UTC+6 in minutes
+    const nowInDhaka = new Date(now.getTime() + (dhakaOffset + now.getTimezoneOffset()) * 60000);
+    const dayOfWeek = nowInDhaka.getDay();
+    const diff = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
+    nowInDhaka.setDate(nowInDhaka.getDate() + diff);
+    // Convert back to UTC midnight for DB query
+    const yyyy = nowInDhaka.getFullYear();
+    const mm = String(nowInDhaka.getMonth() + 1).padStart(2, '0');
+    const dd = String(nowInDhaka.getDate()).padStart(2, '0');
+    startDate = new Date(`${yyyy}-${mm}-${dd}T00:00:00.000Z`);
   }
-  startDate.setHours(0, 0, 0, 0);
 
-  // Calculate end date (Sunday)
+  // Calculate end date (Sunday) — 6 days after Monday
   const endDate = new Date(startDate);
-  endDate.setDate(startDate.getDate() + 6);
-  endDate.setHours(23, 59, 59, 999);
+  endDate.setUTCDate(startDate.getUTCDate() + 6);
+  endDate.setUTCHours(23, 59, 59, 999);
 
   const slots = await prisma.availability_slot.findMany({
     where: {
@@ -94,6 +99,7 @@ const getAvailabilitySlots = async (userId: string, weekStartDate?: string) => {
       { startTime: 'asc' }
     ]
   });
+
 
   // Group consecutive slots into ranges for display, but separate by isBooked status
   const grouped: Record<string, { startTime: string; endTime: string; isBooked: boolean }[]> = {};
@@ -123,7 +129,6 @@ const getAvailabilitySlots = async (userId: string, weekStartDate?: string) => {
     }
   }
   
-  // Convert to frontend format
   const resultSlots = [];
   for (const dateKey of Object.keys(grouped)) {
     const ranges = grouped[dateKey];
@@ -493,6 +498,9 @@ const updateBookingStatus = async (userId: string, bookingId: string, data: { st
     where: {
       id: bookingId,
       tutorProfileId: tutorProfile.id
+    },
+    include: {
+      availability_slot: true
     }
   });
 
@@ -508,41 +516,43 @@ const updateBookingStatus = async (userId: string, bookingId: string, data: { st
     throw new Error("Cannot update cancelled booking");
   }
   
-  return await prisma.booking.update({
-    where: { id: bookingId },
-    data: {
-      status: data.status as any,
-      updatedAt: new Date()
-    },
-    include: {
-      user: {
-        select: {
-          id: true,
-          name: true,
-          email: true
+  return await prisma.$transaction(async (tx: any) => {
+    // If cancelling, free up the slot
+    if (data.status === 'CANCELLED' && booking.availabilitySlotId && (booking as any).availability_slot && !(booking as any).availability_slot.isRecurring) {
+      await tx.availability_slot.update({
+        where: { id: booking.availabilitySlotId },
+        data: { isBooked: false }
+      });
+    }
+
+    return await tx.booking.update({
+      where: { id: bookingId },
+      data: {
+        status: data.status as any,
+        updatedAt: new Date()
+      },
+      include: {
+        user: {
+          select: {
+            id: true,
+            name: true,
+            email: true
+          }
         }
       }
-    }
+    });
   });
 };
 
-// tutor.service.ts (updateAvailabilitySlots method helpers)
-
-
-// Helper function to convert time string to minutes
 export const updateAvailabilitySlots = async (
   userId: string,
   data: { weekStartDate: string; slots: Array<{ date: string; startTime: string; endTime: string }> }
 ) => {
-  // ---------- helpers ----------
-  // used global helpers: timeToMinutes, minutesToTime, getDayOfWeek, reverseDayOfWeekMap
 
 
-  // ---------- tutor profile ----------
   const tutorProfile = await prisma.tutor_profile.findUnique({ where: { userId } });
   if (!tutorProfile) throw new Error("Tutor profile not found");
 
-  // ---------- week bounds ----------
   const weekStart = new Date(data.weekStartDate + "T00:00:00.000Z");
   weekStart.setUTCHours(0, 0, 0, 0);
   if (weekStart.getUTCDay() !== 1) throw new Error("Week start date must be a Monday");
@@ -551,7 +561,6 @@ export const updateAvailabilitySlots = async (
   weekEnd.setUTCDate(weekStart.getUTCDate() + 6);
   weekEnd.setUTCHours(23, 59, 59, 999);
 
-  // ---------- build exact 1-hour chunks from input (do NOT use original ranges) ----------
   const oneHourChunks: {
     date: string;
     dayOfWeek: number;
@@ -591,7 +600,6 @@ export const updateAvailabilitySlots = async (
     }
   }
 
-  // ---------- dedupe chunks so same 1-hour slot from multiple inputs doesn't replicate ----------
   const seen = new Set<string>();
   const dedupedChunks = oneHourChunks
     .sort((a, b) => (a.date === b.date ? a.startMin - b.startMin : a.date.localeCompare(b.date)))
@@ -604,30 +612,28 @@ export const updateAvailabilitySlots = async (
 
   console.log("One-hour chunks to insert:", dedupedChunks);
 
-  //check if any of the time slot is not in past
 
-  function nowInBangladesh() {
-    return new Date(
-      new Date().toLocaleString("en-US", { timeZone: "Asia/Dhaka" })
-    );
+  function getNowInDhaka() {
+    return new Date(new Date().toLocaleString("en-US", { timeZone: "Asia/Dhaka" }));
   }
 
-  const now = nowInBangladesh();
-  let isEverythingInFutureInLocalDateAndTime = true;
+  const now = getNowInDhaka();
+  let hasPastSlots = false;
   for (const chunk of dedupedChunks) {
-    const slotDate = new Date(chunk.date + "T" + chunk.startTime + ":00.000Z");
+    const [h, m] = chunk.startTime.split(':').map(Number);
+    const [year, month, day] = chunk.date.split('-').map(Number);
+    const slotInDhakaContext = new Date(year as number, (month as number) - 1, day, h, m);
     
-    if (slotDate < now) {
-      isEverythingInFutureInLocalDateAndTime = false;
+    if (slotInDhakaContext < now) {
+      hasPastSlots = true;
       break;
     }
   }
 
-  if (!isEverythingInFutureInLocalDateAndTime) {
-    throw new Error("All time slots must be in the future");
+  if (hasPastSlots) {
+    throw new Error("please dont set past dates");
   }
 
-  // ---------- transaction: delete non-booked, then insert these exact 1-hour chunks ----------
   const createdAndExisting = await prisma.$transaction(async (tx: any) => {
     // remove all non-booked slots in the week for this tutor
     await tx.availability_slot.deleteMany({
@@ -672,7 +678,6 @@ export const updateAvailabilitySlots = async (
     });
   });
 
-  // ---------- group consecutive DB rows for response (this does NOT affect DB) ----------
   const grouped: Record<string, { startTime: string; endTime: string }[]> = {};
   createdAndExisting.forEach((s: any) => {
     if (!s.specificDate) return;

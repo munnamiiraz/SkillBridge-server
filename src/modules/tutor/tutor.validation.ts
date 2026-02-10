@@ -1,4 +1,3 @@
-// tutor.validation.ts
 import { z } from "zod";
 
 export const createTutorProfileSchema = z.object({
@@ -13,19 +12,13 @@ export const createTutorProfileSchema = z.object({
 export const updateTutorProfileSchema = z.object({
   name: z.string().min(1, "Name cannot be empty").max(100, "Name too long").optional(),
   image: z.string().url("Invalid image URL").nullable().optional(),
-  phone: z.string().min(1, "Phone cannot be empty").max(20, "Phone too long").optional(),
+  phone: z.string().min(1, "Phone cannot be empty").max(20, "Phone too long").nullable().optional(),
   address: z.string().min(1, "Address cannot be empty").max(500, "Address too long").nullable().optional(),
-  bio: z.string().transform(val => val?.trim() || undefined).pipe(
-    z.string().min(10, "Bio must be at least 10 characters").max(1000, "Bio too long").optional()
-  ).optional(),
-  headline: z.string().transform(val => val?.trim() || undefined).pipe(
-    z.string().min(5, "Headline must be at least 5 characters").max(200, "Headline too long").optional()
-  ).optional(),
+  bio: z.string().min(10, "Bio must be at least 10 characters").max(1000, "Bio too long").nullable().optional(),
+  headline: z.string().min(5, "Headline must be at least 5 characters").max(200, "Headline too long").nullable().optional(),
   hourlyRate: z.number().min(1, "Hourly rate must be at least $1").max(1000, "Hourly rate too high").optional(),
   experience: z.number().min(0, "Experience cannot be negative").max(50, "Experience too high").optional(),
-  education: z.string().transform(val => val?.trim() || undefined).pipe(
-    z.string().min(5, "Education must be at least 5 characters").max(500, "Education too long").optional()
-  ).optional(),
+  education: z.string().min(5, "Education must be at least 5 characters").max(500, "Education too long").nullable().optional(),
   isAvailable: z.boolean().optional()
 }).refine((data) => {
   const fields = Object.values(data).filter(field => field !== undefined);
@@ -52,7 +45,7 @@ export const timeSlotSchema = z.object({
 // Schema for updating availability slots
 export const updateAvailabilitySlotsSchema = z.object({
   weekStartDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Invalid date format (YYYY-MM-DD)"),
-  slots: z.array(timeSlotSchema).min(1, "At least one slot is required")
+  slots: z.array(timeSlotSchema)
 });
 
 export type TimeSlotInput = z.infer<typeof timeSlotSchema>;

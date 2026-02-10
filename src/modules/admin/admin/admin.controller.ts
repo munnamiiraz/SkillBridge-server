@@ -18,12 +18,13 @@ const login = async (req: Request, res: Response, next: NextFunction) => {
 
 const getUsers = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const { page = 1, limit = 10, role, status } = req.query;
+    const { page = 1, limit = 10, role, status, search } = req.query;
     const result = await AdminService.getUsers({
       page: Number(page),
       limit: Number(limit),
       role: role as string,
-      status: status as string
+      status: status as string,
+      search: search as string
     });
     
     res.status(200).json({
@@ -100,7 +101,6 @@ const unbanUser = async (req: Request, res: Response, next: NextFunction) => {
 const getAllBookings = async (req: Request, res: Response, next: NextFunction) => {
   try {
     
-    // First, let's check if there are any bookings at all
     const totalBookings = await prisma.booking.count();
     
     if (totalBookings === 0) {
@@ -117,11 +117,12 @@ const getAllBookings = async (req: Request, res: Response, next: NextFunction) =
       });
     }
     
-    const { page = 1, limit = 10, status } = req.query;
+    const { page = 1, limit = 10, status, search } = req.query;
     const result = await AdminService.getAllBookings({
       page: Number(page),
       limit: Number(limit),
-      status: status as string
+      status: status as string,
+      search: search as string
     });
     
     

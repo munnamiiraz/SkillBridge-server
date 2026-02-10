@@ -341,7 +341,9 @@ export class PublicService {
 
   static async getAllCategories() {
     return await prisma.category.findMany({
-      where: {},
+      where: {
+        status: "ACTIVE"
+      },
       include: {
         subject: {
           orderBy: {
@@ -374,23 +376,28 @@ export class PublicService {
       throw new Error("Tutor profile not found");
     }
     
-    // If no weekStartDate provided, use the current week's Monday
+    // If no weekStartDate provided, use the current week's Monday in Dhaka timezone
     let startDate: Date;
     if (weekStartDate) {
-      startDate = new Date(weekStartDate);
+      // Parse as UTC midnight to match how specificDate is stored in DB
+      startDate = new Date(weekStartDate + "T00:00:00.000Z");
     } else {
-      const today = new Date();
-      const dayOfWeek = today.getDay();
-      const diff = dayOfWeek === 0 ? -6 : 1 - dayOfWeek; // Adjust to get Monday
-      startDate = new Date(today);
-      startDate.setDate(today.getDate() + diff);
+      // Get "today" in Dhaka timezone (UTC+6) to avoid day mismatch
+      const nowInDhaka = new Date(new Date().toLocaleString("en-US", { timeZone: "Asia/Dhaka" }));
+      const dayOfWeek = nowInDhaka.getDay();
+      const diff = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
+      nowInDhaka.setDate(nowInDhaka.getDate() + diff);
+      // Convert back to UTC midnight for DB query
+      const yyyy = nowInDhaka.getFullYear();
+      const mm = String(nowInDhaka.getMonth() + 1).padStart(2, '0');
+      const dd = String(nowInDhaka.getDate()).padStart(2, '0');
+      startDate = new Date(`${yyyy}-${mm}-${dd}T00:00:00.000Z`);
     }
-    startDate.setHours(0, 0, 0, 0);
 
-    // Calculate end date (Sunday)
+    // Calculate end date (Sunday) — 6 days after Monday
     const endDate = new Date(startDate);
-    endDate.setDate(startDate.getDate() + 6);
-    endDate.setHours(23, 59, 59, 999);
+    endDate.setUTCDate(startDate.getUTCDate() + 6);
+    endDate.setUTCHours(23, 59, 59, 999);
 
     const slots = await prisma.availability_slot.findMany({
       where: {
@@ -416,51 +423,41 @@ export class PublicService {
       6: "SATURDAY"
     };
 
-    // Group consecutive slots into ranges for display, but separate by isBooked status
-    const grouped: Record<string, { startTime: string; endTime: string; isBooked: boolean }[]> = {};
-    
-    for (const s of slots) {
-      if (!s.specificDate) continue;
-      
-      const dateKey: string = s.specificDate!.toISOString().split('T')[0]!; // YYYY-MM-DD
-      
-      if (!grouped[dateKey]) {
-        grouped[dateKey] = [];
-      }
-      
-      const ranges = grouped[dateKey]!;
-      const lastRange = ranges[ranges.length - 1];
-      
-      // If this slot is consecutive with the last one AND has the same isBooked status, extend the range
-      if (lastRange && lastRange.endTime === s.startTime && (lastRange as any).isBooked === (s as any).isBooked) {
-        lastRange.endTime = s.endTime;
-      } else {
-        // Otherwise, start a new range
-        ranges.push({
-          startTime: s.startTime,
-          endTime: s.endTime,
-          isBooked: (s as any).isBooked
-        });
-      }
-    }
-    
-    // Convert to frontend format
-    const resultSlots = [];
-    for (const dateKey of Object.keys(grouped)) {
-      const ranges = grouped[dateKey];
-      if (!ranges) continue;
-      
-      for (const range of ranges) {
-        resultSlots.push({
-          id: `${dateKey}-${range.startTime}-${range.endTime}`,
+    const nowInDhaka = new Date(new Date().toLocaleString("en-US", { timeZone: "Asia/Dhaka" }));
+
+    // Return each individual 1-hour slot as-is (no merging)
+    // The frontend expects individual hourly slots for selection
+    const resultSlots = slots
+      .filter(s => {
+        if (!s.specificDate) return false;
+        const dateStr = s.specificDate.toISOString().split('T')[0];
+        if (!dateStr) return false;
+        
+        const timeParts = s.startTime.split(':');
+        const h = parseInt(timeParts[0] || '0', 10);
+        const m = parseInt(timeParts[1] || '0', 10);
+        
+        const dateParts = dateStr.split('-');
+        const year = parseInt(dateParts[0] || '0', 10);
+        const month = parseInt(dateParts[1] || '0', 10);
+        const day = parseInt(dateParts[2] || '0', 10);
+        
+        const slotInDhaka = new Date(year, month - 1, day, h, m);
+        
+        // Exclude booked slots and past slots
+        return !(s as any).isBooked && slotInDhaka >= nowInDhaka;
+      })
+      .map(s => {
+        const dateKey = s.specificDate!.toISOString().split('T')[0]!;
+        return {
+          id: `${dateKey}-${s.startTime}-${s.endTime}`,
           date: dateKey,
           dayOfWeek: reverseDayOfWeekMap[new Date(dateKey + "T00:00:00.000Z").getUTCDay()] || "UNKNOWN",
-          startTime: range.startTime,
-          endTime: range.endTime,
-          isBooked: range.isBooked
-        });
-      }
-    }
+          startTime: s.startTime,
+          endTime: s.endTime,
+          isBooked: (s as any).isBooked ?? false
+        };
+      });
     
     return {
       weekStartDate: startDate.toISOString().split('T')[0],
@@ -470,7 +467,6 @@ export class PublicService {
   }
 
   static async getTutorRatingStats(tutorId: string) {
-    // Find tutor profile
     const tutorProfile = await prisma.tutor_profile.findFirst({
       where: {
         OR: [
@@ -484,7 +480,6 @@ export class PublicService {
       throw new Error("Tutor profile not found");
     }
 
-    // Get all reviews for this tutor
     const reviews = await prisma.review.findMany({
       where: {
         booking: {

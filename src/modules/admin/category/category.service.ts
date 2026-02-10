@@ -1,4 +1,3 @@
-// category.service.ts
 import { prisma } from "../../../lib/prisma";
 import {
   createCategorySchema,
@@ -12,12 +11,10 @@ import {
 } from "./category.vaidation";
 import { randomUUID } from "crypto";
 
-// ============= CATEGORY SERVICES =============
 
 const createCategory = async (data: CreateCategoryInput) => {
   const validatedData = createCategorySchema.parse(data);
 
-  // Check if category with same name already exists
   const existingCategory = await prisma.category.findUnique({
     where: { name: validatedData.name }
   });
@@ -49,7 +46,6 @@ const createCategory = async (data: CreateCategoryInput) => {
 const updateCategory = async (categoryId: string, data: UpdateCategoryInput) => {
   const validatedData = updateCategorySchema.parse(data);
 
-  // Check if category exists
   const existingCategory = await prisma.category.findUnique({
     where: { id: categoryId }
   });
@@ -58,7 +54,6 @@ const updateCategory = async (categoryId: string, data: UpdateCategoryInput) => 
     throw new Error("Category not found");
   }
 
-  // If updating name, check for duplicates
   if (validatedData.name && validatedData.name !== existingCategory.name) {
     const duplicateCategory = await prisma.category.findUnique({
       where: { name: validatedData.name }
@@ -184,7 +179,6 @@ const deleteCategory = async (categoryId: string) => {
     throw new Error("Category not found");
   }
 
-  // Check if category has subjects
   if (category._count.subject > 0) {
     throw new Error("Cannot delete category with existing subjects. Please delete all subjects first.");
   }
@@ -196,12 +190,10 @@ const deleteCategory = async (categoryId: string) => {
   return { message: "Category deleted successfully" };
 };
 
-// ============= SUBJECT SERVICES =============
 
 const createSubject = async (data: CreateSubjectInput) => {
   const validatedData = createSubjectSchema.parse(data);
 
-  // Check if category exists
   const category = await prisma.category.findUnique({
     where: { id: validatedData.categoryId }
   });
@@ -244,7 +236,6 @@ const createSubject = async (data: CreateSubjectInput) => {
 const updateSubject = async (subjectId: string, data: UpdateSubjectInput) => {
   const validatedData = updateSubjectSchema.parse(data);
 
-  // Check if subject exists
   const existingSubject = await prisma.subject.findUnique({
     where: { id: subjectId }
   });
@@ -390,7 +381,6 @@ const deleteSubject = async (subjectId: string) => {
     throw new Error("Subject not found");
   }
 
-  // Check if subject has tutors
   if (subject._count.tutor_subject > 0) {
     throw new Error("Cannot delete subject with assigned tutors. Please remove all tutor assignments first.");
   }

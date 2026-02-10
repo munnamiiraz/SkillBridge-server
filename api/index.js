@@ -10,11 +10,10 @@ import { toNodeHandler } from "better-auth/node";
 // src/lib/auth.ts
 import { betterAuth } from "better-auth";
 import { prismaAdapter } from "better-auth/adapters/prisma";
-var isProduction = process.env.NODE_ENV === "production";
+var isProduction = process.env.NODE_ENV === "production" || !!process.env.RENDER;
 var auth = betterAuth({
   secret: process.env.BETTER_AUTH_SECRET,
-  baseURL: process.env.BETTER_AUTH_URL,
-  // ✅ SESSION CONFIG (version-safe)
+  baseURL: (process.env.BETTER_AUTH_URL || process.env.NEXT_PUBLIC_API_URL || "http://localhost:9000") + "/api/auth",
   session: {
     cookieCache: {
       enabled: true,
@@ -38,7 +37,7 @@ var auth = betterAuth({
       }
     }
   },
-  // ✅ SESSION CALLBACK — THIS IS THE KEY PART
+  // SESSION CALLBACK
   callbacks: {
     session: async ({ session, user }) => {
       if (user && session.user) {
@@ -49,16 +48,24 @@ var auth = betterAuth({
       return session;
     }
   },
-  // ✅ COOKIE / SECURITY CONFIG (NO INVALID PROPS)
+  // COOKIE / SECURITY CONFIG
   advanced: {
     defaultCookieAttributes: {
       sameSite: isProduction ? "none" : "lax",
       secure: isProduction,
-      httpOnly: true,
-      path: "/"
+      httpOnly: true
+    },
+    trustProxy: true,
+    cookies: {
+      state: {
+        attributes: {
+          sameSite: "none",
+          secure: true
+        }
+      }
     }
   },
-  // ✅ HANDLE DEFAULT VALUES PROPERLY
+  // HANDLE DEFAULT VALUES PROPERLY
   databaseHooks: {
     user: {
       create: {
@@ -79,8 +86,9 @@ var auth = betterAuth({
     requireEmailVerification: false
   },
   trustedOrigins: [
-    process.env.APP_URL || "http://localhost:3001",
-    "http://localhost:9000"
+    process.env.APP_URL || "http://localhost:3000",
+    "https://skillbridge-server-9.onrender.com",
+    "https://skill-bridge-client-iota.vercel.app"
   ],
   database: prismaAdapter(prisma, {
     provider: "postgresql"
@@ -95,7 +103,10 @@ function errorHandler(err, req, res, next) {
   let statusCode = 500;
   let errorMessage = "Internal Server Error";
   let errorDetails = err;
-  if (err instanceof prismaNamespace_exports.PrismaClientValidationError) {
+  if (err && typeof err === "object" && err.message) {
+    statusCode = err.status || err.statusCode || 400;
+    errorMessage = err.message;
+  } else if (err instanceof prismaNamespace_exports.PrismaClientValidationError) {
     statusCode = 400;
     errorMessage = "Validation Error: " + err.message.split("\n").filter((line) => line.trim()).pop() || err.message;
   } else if (err instanceof prismaNamespace_exports.PrismaClientKnownRequestError) {
@@ -195,8 +206,8 @@ var auth_default = auth2;
 import { z } from "zod";
 var updateProfileSchema = z.object({
   name: z.string().min(1, "Name cannot be empty").max(100, "Name too long").optional(),
-  image: z.string().url("Invalid image URL").optional(),
-  address: z.string().min(1, "Address cannot be empty").max(500, "Address too long").optional(),
+  image: z.string().url("Invalid image URL").nullable().optional(),
+  address: z.string().min(1, "Address cannot be empty").max(500, "Address too long").nullable().optional(),
   phone: z.string().min(1, "Phone cannot be empty").max(20, "Phone too long").optional()
 }).refine((data) => {
   const fields = Object.values(data).filter((field) => field !== void 0);
@@ -658,8 +669,7 @@ var StudentService = { updateProfile, getProfile, createReview, createBooking, g
 // src/modules/student/student.controller.ts
 var updateProfile2 = async (req, res, next) => {
   try {
-    const { name, image, address, phone } = req.body;
-    const result = await StudentService.updateProfile(req.user.id, { name, image, address, phone });
+    const result = await StudentService.updateProfile(req.user.id, req.body);
     res.status(200).json({
       success: true,
       message: "Profile updated successfully",
@@ -823,6 +833,10 @@ var createTutorProfileSchema = z3.object({
   subjectIds: z3.array(z3.string()).min(1, "At least one subject must be selected")
 });
 var updateTutorProfileSchema = z3.object({
+  name: z3.string().min(1, "Name cannot be empty").max(100, "Name too long").optional(),
+  image: z3.string().url("Invalid image URL").nullable().optional(),
+  phone: z3.string().min(1, "Phone cannot be empty").max(20, "Phone too long").optional(),
+  address: z3.string().min(1, "Address cannot be empty").max(500, "Address too long").nullable().optional(),
   bio: z3.string().transform((val) => val?.trim() || void 0).pipe(
     z3.string().min(10, "Bio must be at least 10 characters").max(1e3, "Bio too long").optional()
   ).optional(),
@@ -856,7 +870,7 @@ var timeSlotSchema = z3.object({
 });
 var updateAvailabilitySlotsSchema = z3.object({
   weekStartDate: z3.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Invalid date format (YYYY-MM-DD)"),
-  slots: z3.array(timeSlotSchema).min(1, "At least one slot is required")
+  slots: z3.array(timeSlotSchema)
 });
 
 // src/modules/tutor/tutor.service.ts
@@ -891,18 +905,18 @@ var getAvailabilitySlots = async (userId, weekStartDate) => {
   }
   let startDate;
   if (weekStartDate) {
-    startDate = new Date(weekStartDate);
+    startDate = /* @__PURE__ */ new Date(weekStartDate + "T00:00:00.000Z");
   } else {
     const today = /* @__PURE__ */ new Date();
-    const dayOfWeek = today.getDay();
+    const dayOfWeek = today.getUTCDay();
     const diff = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
     startDate = new Date(today);
-    startDate.setDate(today.getDate() + diff);
+    startDate.setUTCDate(today.getUTCDate() + diff);
   }
-  startDate.setHours(0, 0, 0, 0);
+  startDate.setUTCHours(0, 0, 0, 0);
   const endDate = new Date(startDate);
-  endDate.setDate(startDate.getDate() + 6);
-  endDate.setHours(23, 59, 59, 999);
+  endDate.setUTCDate(startDate.getUTCDate() + 6);
+  endDate.setUTCHours(23, 59, 59, 999);
   const slots = await prisma.availability_slot.findMany({
     where: {
       tutorProfileId: tutorProfile.id,
@@ -990,28 +1004,45 @@ var createProfile = async (userId, data) => {
 };
 var updateProfile3 = async (userId, data) => {
   const validatedData = updateTutorProfileSchema.parse(data);
-  const updateData = {};
-  if (validatedData.bio !== void 0) {
-    updateData.bio = validatedData.bio;
-  }
-  if (validatedData.headline !== void 0) {
-    updateData.headline = validatedData.headline;
-  }
-  if (validatedData.hourlyRate !== void 0) {
-    updateData.hourlyRate = validatedData.hourlyRate;
-  }
-  if (validatedData.experience !== void 0) {
-    updateData.experience = validatedData.experience;
-  }
-  if (validatedData.education !== void 0) {
-    updateData.education = validatedData.education;
-  }
-  if (validatedData.isAvailable !== void 0) {
-    updateData.isAvailable = validatedData.isAvailable;
-  }
-  return await prisma.tutor_profile.update({
-    where: { userId },
-    data: updateData
+  return await prisma.$transaction(async (tx) => {
+    const userUpdateData = {};
+    const profileUpdateData = {};
+    if (validatedData.name !== void 0) userUpdateData.name = validatedData.name;
+    if (validatedData.image !== void 0) userUpdateData.image = validatedData.image;
+    if (validatedData.phone !== void 0) userUpdateData.phone = validatedData.phone;
+    if (validatedData.address !== void 0) userUpdateData.address = validatedData.address;
+    if (validatedData.bio !== void 0) profileUpdateData.bio = validatedData.bio;
+    if (validatedData.headline !== void 0) profileUpdateData.headline = validatedData.headline;
+    if (validatedData.hourlyRate !== void 0) profileUpdateData.hourlyRate = validatedData.hourlyRate;
+    if (validatedData.experience !== void 0) profileUpdateData.experience = validatedData.experience;
+    if (validatedData.education !== void 0) profileUpdateData.education = validatedData.education;
+    if (validatedData.isAvailable !== void 0) profileUpdateData.isAvailable = validatedData.isAvailable;
+    if (validatedData.address !== void 0) profileUpdateData.address = validatedData.address;
+    if (Object.keys(userUpdateData).length > 0) {
+      await tx.user.update({
+        where: { id: userId },
+        data: userUpdateData
+      });
+    }
+    if (Object.keys(profileUpdateData).length > 0) {
+      return await tx.tutor_profile.update({
+        where: { userId },
+        data: profileUpdateData,
+        include: {
+          user: {
+            select: { id: true, name: true, email: true, image: true, role: true }
+          }
+        }
+      });
+    }
+    return await tx.tutor_profile.findUnique({
+      where: { userId },
+      include: {
+        user: {
+          select: { id: true, name: true, email: true, image: true, role: true }
+        }
+      }
+    });
   });
 };
 var getProfile3 = async (userId) => {
@@ -1934,18 +1965,18 @@ var PublicService = class {
     }
     let startDate;
     if (weekStartDate) {
-      startDate = new Date(weekStartDate);
+      startDate = /* @__PURE__ */ new Date(weekStartDate + "T00:00:00.000Z");
     } else {
       const today = /* @__PURE__ */ new Date();
-      const dayOfWeek = today.getDay();
+      const dayOfWeek = today.getUTCDay();
       const diff = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
       startDate = new Date(today);
-      startDate.setDate(today.getDate() + diff);
+      startDate.setUTCDate(today.getUTCDate() + diff);
     }
-    startDate.setHours(0, 0, 0, 0);
+    startDate.setUTCHours(0, 0, 0, 0);
     const endDate = new Date(startDate);
-    endDate.setDate(startDate.getDate() + 6);
-    endDate.setHours(23, 59, 59, 999);
+    endDate.setUTCDate(startDate.getUTCDate() + 6);
+    endDate.setUTCHours(23, 59, 59, 999);
     const slots = await prisma.availability_slot.findMany({
       where: {
         tutorProfileId: tutorProfile.id,
@@ -1968,40 +1999,17 @@ var PublicService = class {
       5: "FRIDAY",
       6: "SATURDAY"
     };
-    const grouped = {};
-    for (const s of slots) {
-      if (!s.specificDate) continue;
+    const resultSlots = slots.filter((s) => s.specificDate != null).map((s) => {
       const dateKey = s.specificDate.toISOString().split("T")[0];
-      if (!grouped[dateKey]) {
-        grouped[dateKey] = [];
-      }
-      const ranges = grouped[dateKey];
-      const lastRange = ranges[ranges.length - 1];
-      if (lastRange && lastRange.endTime === s.startTime && lastRange.isBooked === s.isBooked) {
-        lastRange.endTime = s.endTime;
-      } else {
-        ranges.push({
-          startTime: s.startTime,
-          endTime: s.endTime,
-          isBooked: s.isBooked
-        });
-      }
-    }
-    const resultSlots = [];
-    for (const dateKey of Object.keys(grouped)) {
-      const ranges = grouped[dateKey];
-      if (!ranges) continue;
-      for (const range of ranges) {
-        resultSlots.push({
-          id: `${dateKey}-${range.startTime}-${range.endTime}`,
-          date: dateKey,
-          dayOfWeek: reverseDayOfWeekMap2[(/* @__PURE__ */ new Date(dateKey + "T00:00:00.000Z")).getUTCDay()] || "UNKNOWN",
-          startTime: range.startTime,
-          endTime: range.endTime,
-          isBooked: range.isBooked
-        });
-      }
-    }
+      return {
+        id: `${dateKey}-${s.startTime}-${s.endTime}`,
+        date: dateKey,
+        dayOfWeek: reverseDayOfWeekMap2[(/* @__PURE__ */ new Date(dateKey + "T00:00:00.000Z")).getUTCDay()] || "UNKNOWN",
+        startTime: s.startTime,
+        endTime: s.endTime,
+        isBooked: s.isBooked ?? false
+      };
+    });
     return {
       weekStartDate: startDate.toISOString().split("T")[0],
       weekEndDate: endDate.toISOString().split("T")[0],
@@ -3300,25 +3308,21 @@ var CategoryRoutes = router5;
 import hpp from "hpp";
 import { rateLimit } from "express-rate-limit";
 var app = express();
-app.set("trust proxy", 1);
+app.set("trust proxy", true);
 app.use(cors({
-  origin: true,
-  // Allow all origins in development
-  credentials: true,
-  methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
-  allowedHeaders: ["Content-Type", "Authorization", "Cookie", "X-Requested-With"],
-  exposedHeaders: ["Set-Cookie"]
+  origin: [
+    process.env.APP_URL,
+    "http://localhost:3000",
+    "https://skill-bridge-client-iota.vercel.app"
+  ],
+  methods: ["GET", "POST", "PUT", "DELETE", "PATCH"],
+  credentials: true
 }));
-app.options("{*path}", cors());
 var limiter = rateLimit({
-  windowMs: 15 * 60 * 1e3,
-  // 15 minutes
-  limit: 100,
-  // Limit each IP to 100 requests per `window` (here, per 15 minutes).
+  windowMs: 1 * 60 * 1e3,
+  limit: 1e3,
   standardHeaders: "draft-7",
-  // draft-6: `RateLimit-*` headers; draft-7: combined `RateLimit` header
   legacyHeaders: false,
-  // Disable the `X-RateLimit-*` headers.
   message: {
     success: false,
     message: "Too many requests from this IP, please try again after 15 minutes"
@@ -3329,39 +3333,7 @@ if (process.env.NODE_ENV === "production") {
 }
 app.use(express.json({ limit: "10kb" }));
 app.use(hpp());
-app.all("/api/auth/*splat", (req, res, next) => {
-  console.log("Auth request:", req.method, req.url, "Origin:", req.headers.origin);
-  next();
-}, toNodeHandler(auth));
-app.get("/get-session", async (req, res) => {
-  try {
-    const session = await auth.api.getSession({
-      headers: req.headers
-    });
-    console.log("=== SESSION DEBUG ===");
-    console.log("Full session:", JSON.stringify(session, null, 2));
-    let dbUser = null;
-    if (session?.user?.id) {
-      dbUser = await prisma.user.findUnique({
-        where: { id: session.user.id },
-        select: { id: true, email: true, name: true, role: true, status: true, phone: true }
-      });
-      console.log("DB User:", JSON.stringify(dbUser, null, 2));
-    }
-    if (session?.user && dbUser) {
-      session.user = {
-        ...session.user,
-        role: dbUser.role,
-        status: dbUser.status,
-        phone: dbUser.phone
-      };
-    }
-    res.json(session);
-  } catch (error) {
-    console.error("Session error:", error);
-    res.status(500).json({ error: "Failed to get session" });
-  }
-});
+app.all("/api/auth/{*any}", toNodeHandler(auth));
 app.use("/api/public", PublicRoutes);
 app.use("/api/student", StudentRoutes);
 app.use("/api/tutor", TutorRoutes);

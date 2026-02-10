@@ -1,8 +1,6 @@
-// category.controller.ts
 import { Request, Response, NextFunction } from "express";
 import { CategoryService } from "./category.service";
 
-// ============= CATEGORY CONTROLLERS =============
 
 const createCategory = async (req: Request, res: Response, next: NextFunction) => {
   try {
@@ -86,7 +84,6 @@ const deleteCategory = async (req: Request, res: Response, next: NextFunction) =
   }
 };
 
-// ============= SUBJECT CONTROLLERS =============
 
 const createSubject = async (req: Request, res: Response, next: NextFunction) => {
   try {

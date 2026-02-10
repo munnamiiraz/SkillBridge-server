@@ -11,8 +11,13 @@ function errorHandler(
     let errorMessage = "Internal Server Error";
     let errorDetails = err;
 
+    // Handle Better Auth errors
+    if (err && typeof err === 'object' && err.message) {
+        statusCode = err.status || err.statusCode || 400;
+        errorMessage = err.message;
+    }
     // PrismaClientValidationError
-    if (err instanceof Prisma.PrismaClientValidationError) {
+    else if (err instanceof Prisma.PrismaClientValidationError) {
         statusCode = 400;
         errorMessage = "Validation Error: " + err.message.split('\n').filter(line => line.trim()).pop() || err.message; 
     }
@@ -63,6 +68,7 @@ function errorHandler(
     res.status(statusCode).json({
         success: false,
         message: errorMessage,
+        ...(errorDetails && errorDetails !== err ? { details: errorDetails } : {}),
         error: process.env.NODE_ENV === 'development' ? err : undefined
     });
 }

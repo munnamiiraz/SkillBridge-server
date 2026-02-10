@@ -1,4 +1,3 @@
-// tutor.controller.ts
 import { Request, Response, NextFunction } from "express";
 import { TutorService } from "./tutor.service";
 import { updateAvailabilitySlotsSchema } from "./tutor.validation";
@@ -13,14 +12,12 @@ const createProfile = async (req: Request, res: Response, next: NextFunction) =>
       });
     }
     
-    // Direct check without triggering auto-creation
     const { prisma } = await import("../../lib/prisma");
     const existingProfile = await prisma.tutor_profile.findUnique({
       where: { userId: req.user.id }
     });
     
     if (existingProfile) {
-      // Profile exists, return it instead of error
       const fullProfile = await TutorService.getProfile(req.user.id);
       return res.status(200).json({
         success: true,

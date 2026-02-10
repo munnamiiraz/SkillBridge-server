@@ -3,13 +3,12 @@ import { prismaAdapter } from "better-auth/adapters/prisma";
 import { prisma } from "./prisma.js";
 
 
-const isProduction = process.env.NODE_ENV === "production";
+const isProduction = process.env.NODE_ENV === "production" || !!process.env.RENDER;
 
 export const auth = betterAuth({
   secret: process.env.BETTER_AUTH_SECRET,
-  baseURL: process.env.BETTER_AUTH_URL,
+  baseURL: (process.env.BETTER_AUTH_URL || process.env.NEXT_PUBLIC_API_URL || "http://localhost:9000") + "/api/auth",
 
-  // ✅ SESSION CONFIG (version-safe)
   session: {
     cookieCache: {
       enabled: true,
@@ -32,7 +31,6 @@ export const auth = betterAuth({
       },
     }
   },
-  // ✅ SESSION CALLBACK — THIS IS THE KEY PART
   callbacks: {
     session: async ({ session, user }: any) => {
       if (user && session.user) {
@@ -44,17 +42,24 @@ export const auth = betterAuth({
     },
   },
 
-  // ✅ COOKIE / SECURITY CONFIG (NO INVALID PROPS)
+  // COOKIE / SECURITY CONFIG
   advanced: {
     defaultCookieAttributes: {
       sameSite: isProduction ? "none" : "lax",
       secure: isProduction,
       httpOnly: true,
-      path: "/",
+    },
+    trustProxy: true,
+    cookies: {
+      state: {
+        attributes: {
+          sameSite: "none",
+          secure: true,
+        },
+      },
     },
   },
 
-  // ✅ HANDLE DEFAULT VALUES PROPERLY
   databaseHooks: {
     user: {
       create: {
@@ -78,10 +83,8 @@ export const auth = betterAuth({
 
   trustedOrigins: [
     process.env.APP_URL || "http://localhost:3000",
-    "http://localhost:3000",
-    "http://localhost:3001",
-    "http://localhost:9000",
-    "http://localhost",
+    "https://skillbridge-server-9.onrender.com",
+    "https://skill-bridge-client-iota.vercel.app"
   ],
 
   database: prismaAdapter(prisma, {

@@ -21,7 +21,6 @@ import {
 const login = async (data: AdminLoginInput) => {
   const validatedData = adminLoginSchema.parse(data);
   
-  // Use better-auth to sign in the user
   const signInResult = await auth.api.signInEmail({
     body: {
       email: validatedData.email,
@@ -33,7 +32,6 @@ const login = async (data: AdminLoginInput) => {
     throw new Error("Invalid credentials");
   }
   
-  // Check if user is admin
   if (signInResult.user.role !== "ADMIN") {
     throw new Error("Access denied. Admin role required.");
   }
@@ -49,7 +47,7 @@ const login = async (data: AdminLoginInput) => {
   };
 };
 
-const getUsers = async (options: { page: number; limit: number; role?: string; status?: string }) => {
+const getUsers = async (options: { page: number; limit: number; role?: string; status?: string; search?: string }) => {
   const paginationHelper = paginationSortingHelper({
     page: options.page,
     limit: options.limit,
@@ -65,6 +63,13 @@ const getUsers = async (options: { page: number; limit: number; role?: string; s
 
   if (options.status) {
     whereClause.status = options.status;
+  }
+
+  if (options.search) {
+    whereClause.OR = [
+      { name: { contains: options.search, mode: "insensitive" } },
+      { email: { contains: options.search, mode: "insensitive" } }
+    ];
   }
 
   const [users, total] = await Promise.all([
@@ -151,7 +156,7 @@ const updateUserStatus = async (userId: string, data: UpdateUserStatusInput) => 
   });
 };
 
-const getAllBookings = async (options: { page: number; limit: number; status?: string }) => {
+const getAllBookings = async (options: { page: number; limit: number; status?: string; search?: string }) => {
   
   const paginationHelper = paginationSortingHelper({
     page: options.page,
@@ -169,6 +174,25 @@ const getAllBookings = async (options: { page: number; limit: number; status?: s
     } else if (['PENDING', 'CONFIRMED', 'ONGOING', 'COMPLETED', 'CANCELLED'].includes(options.status)) {
       whereClause.status = options.status;
     }
+  }
+
+  if (options.search) {
+    whereClause.OR = [
+      { subject: { contains: options.search, mode: "insensitive" } },
+      { id: { contains: options.search, mode: "insensitive" } },
+      {
+        user: {
+          name: { contains: options.search, mode: "insensitive" }
+        }
+      },
+      {
+        tutor_profile: {
+          user: {
+            name: { contains: options.search, mode: "insensitive" }
+          }
+        }
+      }
+    ];
   }
 
 
@@ -228,23 +252,19 @@ const getAllBookings = async (options: { page: number; limit: number; status?: s
 
 const getPlatformStats = async () => {
   const [userStats, bookingStats, revenueStats, recentActivity] = await Promise.all([
-    // User statistics
     prisma.user.groupBy({
       by: ['role'],
       _count: { role: true }
     }),
-    // Booking statistics
     prisma.booking.groupBy({
       by: ['status'],
       _count: { status: true }
     }),
-    // Revenue statistics
     prisma.booking.aggregate({
       where: { status: 'COMPLETED' },
       _sum: { price: true },
       _count: { id: true }
     }),
-    // Recent activity (last 7 days)
     Promise.all([
       prisma.user.count({
         where: {
@@ -310,7 +330,6 @@ const cancelBooking = async (bookingId: string, data: { reason?: string; refundA
   }
   
   return await prisma.$transaction(async (tx: any) => {
-    // Update booking status
     const updatedBooking = await tx.booking.update({
       where: { id: bookingId },
       data: {
@@ -319,7 +338,6 @@ const cancelBooking = async (bookingId: string, data: { reason?: string; refundA
       }
     });
     
-    // Free up the availability slot
     const bookingAny = booking as any;
     if (bookingAny.availability_slot) {
       await tx.availability_slot.update({
