@@ -40,8 +40,35 @@ services:
       - /app/node_modules
     command: npm run dev
 
+  prom-server:
+    image: prom/prometheus
+    container_name: skillbridge-prometheus-dev
+    restart: unless-stopped
+    ports:
+      - "9091:9090"
+    volumes:
+      - ./prometheus-config.yml:/etc/prometheus/prometheus.yml
+    networks:
+      - skillbridge-dev-network
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: skillbridge-grafana-dev
+    restart: unless-stopped
+    ports:
+      - "4000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+    volumes:
+      - grafana_dev_data:/var/lib/grafana
+    depends_on:
+      - prom-server
+    networks:
+      - skillbridge-dev-network
+
 volumes:
   postgres_dev_data:
+  grafana_dev_data:
 
 networks:
   skillbridge-dev-network:

@@ -7,8 +7,9 @@ RUN npm install -g nodemon tsx
 # Set working directory
 WORKDIR /app
 
-# Copy package files
+# Copy package files and prisma schema
 COPY package*.json ./
+COPY prisma ./prisma/
 
 # Install all dependencies (including dev dependencies)
 RUN npm install
@@ -16,11 +17,8 @@ RUN npm install
 # Copy source code
 COPY . .
 
-# Generate Prisma client
-RUN npx prisma generate
-
 # Expose port
-EXPOSE 9000
+EXPOSE 10000
 
 # Start development server with hot reload
 CMD ["npm", "run", "dev"]

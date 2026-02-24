@@ -1,7 +1,8 @@
 import express, { Application } from "express";
 import { toNodeHandler } from "better-auth/node";
 import { auth } from "./lib/auth.js";
-import { prisma } from "./lib/prisma.js";
+
+import client from "prom-client"
 import cors from 'cors';
 import errorHandler from "./middleware/globalErrorHandler.js";
 import { notFound } from "./middleware/notFound.js";
@@ -16,6 +17,7 @@ import { rateLimit } from "express-rate-limit";
 
 const app: Application = express();
 app.set("trust proxy", true);
+app.use(helmet());
 
 app.use(cors({
     origin: [
@@ -53,6 +55,16 @@ app.use("/api/student", StudentRoutes);
 app.use("/api/tutor", TutorRoutes);
 app.use("/api/admin", AdminRoutes);
 app.use("/api/admin", CategoryRoutes);
+
+
+client.collectDefaultMetrics();
+
+app.get("/metrics", async (req, res) => {
+    res.setHeader('Content-Type', client.register.contentType);
+    const metric = await client.register.metrics()
+    res.send(metric)
+})
+
 
 app.get("/", (req, res) => {
     res.send("Hello, World!");
