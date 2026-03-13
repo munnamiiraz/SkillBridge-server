@@ -1,4 +1,7 @@
 import { prisma } from "../../lib/prisma";
+import redisClient from "../../lib/redis";
+import { createHash } from "crypto";
+import { performance } from "node:perf_hooks";
 
 interface SearchFilters {
   subject?: string;
@@ -19,6 +22,51 @@ interface PaginationOptions {
 
 export class PublicService {
   static async searchTutors(filters: SearchFilters, paginationOptions: PaginationOptions) {
+    const debugPerf = process.env.DEBUG_PUBLIC_TUTOR_SEARCH === "true";
+    const t0 = debugPerf ? performance.now() : 0;
+
+    const sortBy =
+      (paginationOptions?.orderBy && Object.keys(paginationOptions.orderBy)[0]) || "averageRating";
+    const sortOrder = paginationOptions?.orderBy?.[sortBy] || "desc";
+
+    const cacheTtlSeconds = Number(process.env.PUBLIC_TUTOR_SEARCH_CACHE_TTL_SECONDS ?? 30);
+    const cacheKeyPayload = {
+      subject: filters.subject ?? "",
+      category: filters.category ?? "",
+      minRating: filters.minRating ?? null,
+      maxRating: filters.maxRating ?? null,
+      minPrice: filters.minPrice ?? null,
+      maxPrice: filters.maxPrice ?? null,
+      minTotalReviews: filters.minTotalReviews ?? null,
+      searchTerm: filters.searchTerm ?? "",
+      skip: paginationOptions.skip,
+      take: paginationOptions.take,
+      sortBy,
+      sortOrder
+    };
+    const cacheKeyHash = createHash("sha256")
+      .update(JSON.stringify(cacheKeyPayload))
+      .digest("hex");
+    const cacheKey = `public:tutors:search:v1:${cacheKeyHash}`;
+
+    let cacheHit = false;
+    if (cacheTtlSeconds > 0) {
+      try {
+        const cached = await redisClient.get(cacheKey);
+        if (cached) {
+          cacheHit = true;
+          const parsed = JSON.parse(cached);
+          if (debugPerf) {
+            const ms = Math.round(performance.now() - t0);
+            console.log(`[PublicService.searchTutors] cache=hit ttl=${cacheTtlSeconds}s ms=${ms}`);
+          }
+          return parsed;
+        }
+      } catch (err) {
+        console.warn("[PublicService.searchTutors] Redis cache read failed:", err);
+      }
+    }
+
     const whereClause: any = {
       isAvailable: true,
       user: {
@@ -133,20 +181,24 @@ export class PublicService {
               }
             ]
           },
-          include: {
+          select: {
+            id: true,
+            userId: true,
+            averageRating: true,
+            totalReviews: true,
+            bio: true,
+            hourlyRate: true,
+            isFeatured: true,
             user: {
               select: {
-                id: true,
                 name: true,
                 image: true
               }
             },
             tutor_subject: {
-              include: {
+              select: {
                 subject: {
-                  include: {
-                    category: true
-                  }
+                  select: { name: true }
                 }
               }
             }
@@ -160,8 +212,21 @@ export class PublicService {
       const totalPages = Math.ceil(total / paginationOptions.take);
       const currentPage = Math.floor(paginationOptions.skip / paginationOptions.take) + 1;
 
-      return {
-        data: tutors,
+      const formattedTutors = tutors.map(tutor => ({
+        id: tutor.id,
+        userId: tutor.userId,
+        name: tutor.user.name,
+        profilePic: tutor.user.image,
+        avgRating: tutor.averageRating,
+        totalReviews: tutor.totalReviews,
+        bio: tutor.bio,
+        hourlyRate: tutor.hourlyRate,
+        subjects: tutor.tutor_subject.map(ts => ts.subject.name),
+        isFeatured: tutor.isFeatured
+      }));
+
+      const response = {
+        data: formattedTutors,
         meta: {
           total,
           page: currentPage,
@@ -169,6 +234,23 @@ export class PublicService {
           totalPages
         }
       };
+
+      if (cacheTtlSeconds > 0) {
+        try {
+          await redisClient.setEx(cacheKey, cacheTtlSeconds, JSON.stringify(response));
+        } catch (err) {
+          console.warn("[PublicService.searchTutors] Redis cache write failed:", err);
+        }
+      }
+
+      if (debugPerf) {
+        const ms = Math.round(performance.now() - t0);
+        console.log(
+          `[PublicService.searchTutors] cache=${cacheHit ? "hit" : "miss"} ttl=${cacheTtlSeconds}s ms=${ms}`
+        );
+      }
+
+      return response;
     } catch (error) {
       console.error('[PublicService] Error in searchTutors query:', error);
       throw error;

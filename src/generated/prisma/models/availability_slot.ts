@@ -1488,6 +1488,11 @@ export type availability_slotFindManyArgs<ExtArgs extends runtime.Types.Extensio
    * Skip the first `n` availability_slots.
    */
   skip?: number
+  /**
+   * {@link https://www.prisma.io/docs/concepts/components/prisma-client/distinct Distinct Docs}
+   * 
+   * Filter by unique combinations of availability_slots.
+   */
   distinct?: Prisma.Availability_slotScalarFieldEnum | Prisma.Availability_slotScalarFieldEnum[]
 }
 

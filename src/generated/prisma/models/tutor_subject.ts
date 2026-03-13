@@ -1166,6 +1166,11 @@ export type tutor_subjectFindManyArgs<ExtArgs extends runtime.Types.Extensions.I
    * Skip the first `n` tutor_subjects.
    */
   skip?: number
+  /**
+   * {@link https://www.prisma.io/docs/concepts/components/prisma-client/distinct Distinct Docs}
+   * 
+   * Filter by unique combinations of tutor_subjects.
+   */
   distinct?: Prisma.Tutor_subjectScalarFieldEnum | Prisma.Tutor_subjectScalarFieldEnum[]
 }
 

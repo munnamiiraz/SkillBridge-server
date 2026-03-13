@@ -253,6 +253,11 @@ const updateProfile = async (userId: string, data: UpdateTutorProfileInput) => {
 };
 
 const getProfile = async (userId: string) => {
+  const today = new Date();
+  today.setUTCHours(0, 0, 0, 0);
+  const nextWeek = new Date(today);
+  nextWeek.setUTCDate(today.getUTCDate() + 7);
+
   const profile = await prisma.tutor_profile.findUnique({
     where: { userId },
     include: {
@@ -268,7 +273,18 @@ const getProfile = async (userId: string) => {
           }
         }
       },
-      availability_slot: true
+      // 🚀 PERFORMANCE FIX: Only fetch the next 7 days of slots, not the whole history!
+      availability_slot: {
+        where: {
+          specificDate: {
+            gte: today,
+            lte: nextWeek
+          }
+        },
+        orderBy: {
+          specificDate: 'asc'
+        }
+      }
     }
   });
 
@@ -276,10 +292,10 @@ const getProfile = async (userId: string) => {
     return null;
   }
 
-  // Fetch reviews and stats safely
+  // Fetch reviews and stats safely - Pass profile.id directly to avoid redundant queries
   const [stats, reviews] = await Promise.all([
-    getRatingStats(userId).catch(() => null),
-    getReviews(userId, { page: 1, limit: 10 }).catch(() => null)
+    getRatingStats(profile.id).catch(() => null),
+    getReviews(profile.id, { page: 1, limit: 10 }).catch(() => null)
   ]);
 
   return {
@@ -357,15 +373,7 @@ const getTeachingSessions = async (userId: string, options: { page: number; limi
   };
 };
 
-const getReviews = async (userId: string, options: { page: number; limit: number; rating?: number }) => {
-  const tutorProfile = await prisma.tutor_profile.findUnique({
-    where: { userId }
-  });
-  
-  if (!tutorProfile) {
-    throw new Error("Tutor profile not found");
-  }
-  
+const getReviews = async (tutorProfileId: string, options: { page: number; limit: number; rating?: number }) => {
   const paginationHelper = paginationSortingHelper({
     page: options.page,
     limit: options.limit,
@@ -375,7 +383,7 @@ const getReviews = async (userId: string, options: { page: number; limit: number
 
   const whereClause: any = {
     booking: {
-      tutorProfileId: tutorProfile.id
+      tutorProfileId: tutorProfileId
     }
   };
 
@@ -425,21 +433,13 @@ const getReviews = async (userId: string, options: { page: number; limit: number
   };
 };
 
-const getRatingStats = async (userId: string) => {
-  const tutorProfile = await prisma.tutor_profile.findUnique({
-    where: { userId }
-  });
-  
-  if (!tutorProfile) {
-    throw new Error("Tutor profile not found");
-  }
-
+const getRatingStats = async (tutorProfileId: string) => {
   const [ratingDistribution, totalReviews, averageRating] = await Promise.all([
     prisma.review.groupBy({
       by: ['rating'],
       where: {
         booking: {
-          tutorProfileId: tutorProfile.id
+          tutorProfileId: tutorProfileId
         }
       },
       _count: {
@@ -452,14 +452,14 @@ const getRatingStats = async (userId: string) => {
     prisma.review.count({
       where: {
         booking: {
-          tutorProfileId: tutorProfile.id
+          tutorProfileId: tutorProfileId
         }
       }
     }),
     prisma.review.aggregate({
       where: {
         booking: {
-          tutorProfileId: tutorProfile.id
+          tutorProfileId: tutorProfileId
         }
       },
       _avg: {

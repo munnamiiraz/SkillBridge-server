@@ -22,6 +22,9 @@ model account {
   createdAt             DateTime  @default(now())
   updatedAt             DateTime  @updatedAt
   user                  user      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([providerId, accountId])
 }
 
 model availability_slot {
@@ -37,6 +40,10 @@ model availability_slot {
   updatedAt      DateTime      @updatedAt
   tutor_profile  tutor_profile @relation(fields: [tutorProfileId], references: [id], onDelete: Cascade)
   booking        booking[]
+
+  @@index([tutorProfileId])
+  @@index([dayOfWeek])
+  @@index([tutorProfileId, dayOfWeek, isBooked])
 }
 
 model booking {
@@ -57,6 +64,14 @@ model booking {
   tutor_profile      tutor_profile      @relation(fields: [tutorProfileId], references: [id], onDelete: Cascade)
   availability_slot  availability_slot? @relation(fields: [availabilitySlotId], references: [id], onDelete: SetNull)
   review             review?
+
+  @@index([studentId])
+  @@index([tutorProfileId])
+  @@index([availabilitySlotId])
+  @@index([status])
+  @@index([scheduledAt])
+  @@index([tutorProfileId, status])
+  @@index([studentId, status])
 }
 
 model category {
@@ -79,6 +94,8 @@ model review {
   updatedAt DateTime @updatedAt
   booking   booking  @relation(fields: [bookingId], references: [id], onDelete: Cascade)
   user      user     @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@index([studentId])
 }
 
 model session {
@@ -91,6 +108,8 @@ model session {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   user      user     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
 }
 
 model subject {
@@ -103,6 +122,7 @@ model subject {
   tutor_subject tutor_subject[]
 
   @@unique([name, categoryId])
+  @@index([categoryId])
 }
 
 model tutor_profile {
@@ -125,6 +145,11 @@ model tutor_profile {
   booking           booking[]
   user              user                @relation(fields: [userId], references: [id], onDelete: Cascade)
   tutor_subject     tutor_subject[]
+
+  @@index([isFeatured])
+  @@index([isAvailable])
+  @@index([averageRating])
+  @@index([isAvailable, isFeatured])
 }
 
 model tutor_subject {
@@ -135,6 +160,8 @@ model tutor_subject {
   tutor_profile  tutor_profile @relation(fields: [tutorProfileId], references: [id], onDelete: Cascade)
 
   @@unique([tutorProfileId, subjectId])
+  @@index([subjectId])
+  @@index([tutorProfileId])
 }
 
 model user {
@@ -156,6 +183,10 @@ model user {
   review        review[]
   session       session[]
   tutor_profile tutor_profile?
+
+  @@index([role])
+  @@index([status])
+  @@index([role, status])
 }
 
 model verification {
@@ -165,6 +196,8 @@ model verification {
   expiresAt  DateTime
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
+
+  @@index([identifier])
 }
 
 enum BookingStatus {

@@ -13,6 +13,12 @@ import { CategoryRoutes } from "./modules/admin/category/category.routes.js";
 import helmet from "helmet";
 import hpp from "hpp";
 import { rateLimit } from "express-rate-limit";
+import cookieParser from 'cookie-parser';
+import { connectRedis } from './lib/redis';
+import {authRoutes} from "./modules/auth/auth.routes.js"
+import { sessionAuth } from "./middleware/sessionAuth.js";
+import { kafkaClient } from "./lib/kafka.js";
+
 
 const app: Application = express();
 app.set("trust proxy", true);
@@ -27,7 +33,7 @@ app.use(cors({
     credentials: true,
 }));
 
-const limiter = rateLimit({
+const limiter     = rateLimit({
 	windowMs: 1 * 60 * 1000, 
 	limit: 1000, 
 	standardHeaders: 'draft-7', 
@@ -42,10 +48,13 @@ if (process.env.NODE_ENV === 'production') {
     app.use(limiter);
 }
 
+app.use(cookieParser());
 app.use(express.json({ limit: '10kb' })); 
 app.use(hpp()); 
 
-app.all("/api/auth/{*any}", toNodeHandler(auth));
+// Express 5 (path-to-regexp v6) requires wildcard segments to be named.
+app.all("/api/auth", toNodeHandler(auth));
+app.all("/api/auth/*rest", toNodeHandler(auth));
 
 
 app.use("/api/public", PublicRoutes);
@@ -54,13 +63,32 @@ app.use("/api/tutor", TutorRoutes);
 app.use("/api/admin", AdminRoutes);
 app.use("/api/admin", CategoryRoutes);
 
-app.get("/", (req, res) => {
-    res.send("Hello, World!");
-});
+// app.get("/api/test-kafka", async (req, res) => {
+//     try {
+//         await kafkaClient.sendMessage(process.env.KAFKA_TOPIC_NOTIFICATIONS || "notifications", {
+//             type: "TEST_EVENT",
+//             message: "Hello from Kafka! Industry Standard implementation is working.",
+//             timestamp: Date.now()
+//         });
+//         res.status(200).json({ status: "success", message: "Event published to Kafka" });
+//     } catch (error: any) {
+//         res.status(500).json({ status: "error", message: error.message });
+//     }
+// });
 
-app.get("/health", (req, res) => {
+app.get("/", (req, res) => {
     res.status(200).json({ status: "ok", message: "Server is healthy" });
 });
+
+
+app.use('/api/session-auth', authRoutes);
+
+
+export const initializeAppServices = async () => {
+    await connectRedis();
+};
+
+
 
 app.use(notFound)
 app.use(errorHandler)

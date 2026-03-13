@@ -17,6 +17,7 @@ declare global {
         role: string;
         emailVerified: boolean;
       };
+      sessionId?: string;
     }
   }
 }
@@ -24,10 +25,58 @@ declare global {
 const auth = (...roles: UserRole[]) => {
   return async (req: Request, res: Response, next: NextFunction) => {
     try {
-      // get user session
-      const session = await betterAuth.api.getSession({
-        headers: req.headers as any,
-      });
+      // 1. Get the session token from cookies or Headers
+      // Better-Auth usually stores the session in a cookie called "better-auth.session_token"
+      // or it might be passed as a Bearer token.
+      const rawToken = req.headers.authorization?.split(" ")[1] || req.cookies?.["better-auth.session_token"] || req.cookies?.sessionId;
+
+      let sessionData = null;
+
+      // 2. ONLY IF we have a token, check Redis FIRST (Super Fast! 🚀)
+      if (rawToken) {
+        try {
+          // You need to import sessionService at the top of the file!
+          const { sessionService } = await import("../modules/auth/session.service.js");
+          sessionData = await sessionService.get(rawToken);
+        } catch (redisError) {
+          console.error("Redis Cache Error:", redisError);
+          // Don't fail the request gracefully fallback to DB
+        }
+      }
+
+      let session;
+
+      // 3. CACHE MISS: If not in Redis, check Database (Slow Fallback 🐢)
+      if (sessionData) {
+        // We got it from Redis! Reconstruct the session object expected by your code
+        session = { user: sessionData };
+      } else {
+        // Query Database
+        session = await betterAuth.api.getSession({
+          headers: req.headers as any,
+        });
+
+        // 4. RE-HYDRATE CACHE: Found in DB? Save it back to Redis!
+        if (session && rawToken) {
+           try {
+              const { sessionService } = await import("../modules/auth/session.service.js");
+              await sessionService.create(
+                session.user.id,
+                session.user.email,
+                session.user.role as string,
+                session.user.emailVerified,
+                session.user.name,
+                {
+                  userAgent: req.headers["user-agent"] || "unknown",
+                  ip: req.ip || "unknown"
+                },
+                rawToken
+              );
+           } catch (e) {
+             console.error("Failed to hydrate Redis:", e);
+           }
+        }
+      }
 
       if (!session) {
         return res.status(401).json({
@@ -44,7 +93,7 @@ const auth = (...roles: UserRole[]) => {
       }
 
       req.user = {
-        id: session.user.id,
+        id: (session.user as any).id || (session.user as any).userId,
         email: session.user.email,
         name: session.user.name,
         role: session.user.role as string,

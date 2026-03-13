@@ -1,101 +1,20 @@
 import {
+  auth
+} from "./chunk-GXZOUJA3.js";
+import {
   prisma,
   prismaNamespace_exports
-} from "./chunk-UY5ORJKW.js";
+} from "./chunk-SG6LRVCY.js";
+import {
+  connectRedis,
+  redis_default,
+  sessionService
+} from "./chunk-JN65OFNV.js";
+import "./chunk-MLKGABMK.js";
 
 // src/app.ts
 import express from "express";
 import { toNodeHandler } from "better-auth/node";
-
-// src/lib/auth.ts
-import { betterAuth } from "better-auth";
-import { prismaAdapter } from "better-auth/adapters/prisma";
-var isProduction = process.env.NODE_ENV === "production" || !!process.env.RENDER;
-var auth = betterAuth({
-  secret: process.env.BETTER_AUTH_SECRET,
-  baseURL: (process.env.BETTER_AUTH_URL || process.env.NEXT_PUBLIC_API_URL || "http://localhost:9000") + "/api/auth",
-  session: {
-    cookieCache: {
-      enabled: true,
-      maxAge: 60 * 60 * 24 * 7
-      // 7 days
-    }
-  },
-  user: {
-    additionalFields: {
-      role: {
-        type: "string",
-        default: "STUDENT"
-      },
-      phone: {
-        type: "string",
-        default: null
-      },
-      status: {
-        type: "string",
-        default: "ACTIVE"
-      }
-    }
-  },
-  // SESSION CALLBACK
-  callbacks: {
-    session: async ({ session, user }) => {
-      if (user && session.user) {
-        session.user.role = user.role;
-        session.user.phone = user.phone;
-        session.user.status = user.status;
-      }
-      return session;
-    }
-  },
-  // COOKIE / SECURITY CONFIG
-  advanced: {
-    defaultCookieAttributes: {
-      sameSite: isProduction ? "none" : "lax",
-      secure: isProduction,
-      httpOnly: true
-    },
-    trustProxy: true,
-    cookies: {
-      state: {
-        attributes: {
-          sameSite: "none",
-          secure: true
-        }
-      }
-    }
-  },
-  // HANDLE DEFAULT VALUES PROPERLY
-  databaseHooks: {
-    user: {
-      create: {
-        before: async (user) => ({
-          data: {
-            ...user,
-            role: user.role ?? "STUDENT",
-            status: user.status ?? "ACTIVE",
-            emailVerified: true
-          }
-        })
-      }
-    }
-  },
-  emailAndPassword: {
-    enabled: true,
-    autoSignIn: true,
-    requireEmailVerification: false
-  },
-  trustedOrigins: [
-    process.env.APP_URL || "http://localhost:3000",
-    "https://skillbridge-server-9.onrender.com",
-    "https://skill-bridge-client-iota.vercel.app"
-  ],
-  database: prismaAdapter(prisma, {
-    provider: "postgresql"
-  })
-});
-
-// src/app.ts
 import cors from "cors";
 
 // src/middleware/globalErrorHandler.ts
@@ -145,6 +64,7 @@ function errorHandler(err, req, res, next) {
   res.status(statusCode).json({
     success: false,
     message: errorMessage,
+    ...errorDetails && errorDetails !== err ? { details: errorDetails } : {},
     error: process.env.NODE_ENV === "development" ? err : void 0
   });
 }
@@ -166,9 +86,43 @@ import { Router } from "express";
 var auth2 = (...roles) => {
   return async (req, res, next) => {
     try {
-      const session = await auth.api.getSession({
-        headers: req.headers
-      });
+      const rawToken = req.headers.authorization?.split(" ")[1] || req.cookies?.["better-auth.session_token"] || req.cookies?.sessionId;
+      let sessionData = null;
+      if (rawToken) {
+        try {
+          const { sessionService: sessionService2 } = await import("./session.service-FF4MPBA6.js");
+          sessionData = await sessionService2.get(rawToken);
+        } catch (redisError) {
+          console.error("Redis Cache Error:", redisError);
+        }
+      }
+      let session;
+      if (sessionData) {
+        session = { user: sessionData };
+      } else {
+        session = await auth.api.getSession({
+          headers: req.headers
+        });
+        if (session && rawToken) {
+          try {
+            const { sessionService: sessionService2 } = await import("./session.service-FF4MPBA6.js");
+            await sessionService2.create(
+              session.user.id,
+              session.user.email,
+              session.user.role,
+              session.user.emailVerified,
+              session.user.name,
+              {
+                userAgent: req.headers["user-agent"] || "unknown",
+                ip: req.ip || "unknown"
+              },
+              rawToken
+            );
+          } catch (e) {
+            console.error("Failed to hydrate Redis:", e);
+          }
+        }
+      }
       if (!session) {
         return res.status(401).json({
           success: false,
@@ -182,7 +136,7 @@ var auth2 = (...roles) => {
         });
       }
       req.user = {
-        id: session.user.id,
+        id: session.user.id || session.user.userId,
         email: session.user.email,
         name: session.user.name,
         role: session.user.role,
@@ -469,7 +423,22 @@ var getBookings = async (studentId, options) => {
     studentId
   };
   if (options.status) {
-    whereClause.status = options.status;
+    if (options.status === "ONGOING") {
+      const now = /* @__PURE__ */ new Date();
+      whereClause.OR = [
+        { status: "ONGOING" },
+        {
+          AND: [
+            { status: "CONFIRMED" },
+            { scheduledAt: { lte: now } },
+            { scheduledAt: { gte: new Date(now.getTime() - 60 * 6e4) } }
+            // Within last hour
+          ]
+        }
+      ];
+    } else {
+      whereClause.status = options.status;
+    }
   }
   const [bookings, total] = await Promise.all([
     prisma.booking.findMany({
@@ -574,7 +543,9 @@ var cancelBooking = async (studentId, bookingId) => {
       id: bookingId,
       studentId
     },
-    include: {}
+    include: {
+      availability_slot: true
+    }
   });
   if (!booking) {
     throw new Error("Booking not found");
@@ -835,19 +806,13 @@ var createTutorProfileSchema = z3.object({
 var updateTutorProfileSchema = z3.object({
   name: z3.string().min(1, "Name cannot be empty").max(100, "Name too long").optional(),
   image: z3.string().url("Invalid image URL").nullable().optional(),
-  phone: z3.string().min(1, "Phone cannot be empty").max(20, "Phone too long").optional(),
+  phone: z3.string().min(1, "Phone cannot be empty").max(20, "Phone too long").nullable().optional(),
   address: z3.string().min(1, "Address cannot be empty").max(500, "Address too long").nullable().optional(),
-  bio: z3.string().transform((val) => val?.trim() || void 0).pipe(
-    z3.string().min(10, "Bio must be at least 10 characters").max(1e3, "Bio too long").optional()
-  ).optional(),
-  headline: z3.string().transform((val) => val?.trim() || void 0).pipe(
-    z3.string().min(5, "Headline must be at least 5 characters").max(200, "Headline too long").optional()
-  ).optional(),
+  bio: z3.string().min(10, "Bio must be at least 10 characters").max(1e3, "Bio too long").nullable().optional(),
+  headline: z3.string().min(5, "Headline must be at least 5 characters").max(200, "Headline too long").nullable().optional(),
   hourlyRate: z3.number().min(1, "Hourly rate must be at least $1").max(1e3, "Hourly rate too high").optional(),
   experience: z3.number().min(0, "Experience cannot be negative").max(50, "Experience too high").optional(),
-  education: z3.string().transform((val) => val?.trim() || void 0).pipe(
-    z3.string().min(5, "Education must be at least 5 characters").max(500, "Education too long").optional()
-  ).optional(),
+  education: z3.string().min(5, "Education must be at least 5 characters").max(500, "Education too long").nullable().optional(),
   isAvailable: z3.boolean().optional()
 }).refine((data) => {
   const fields = Object.values(data).filter((field) => field !== void 0);
@@ -907,13 +872,17 @@ var getAvailabilitySlots = async (userId, weekStartDate) => {
   if (weekStartDate) {
     startDate = /* @__PURE__ */ new Date(weekStartDate + "T00:00:00.000Z");
   } else {
-    const today = /* @__PURE__ */ new Date();
-    const dayOfWeek = today.getUTCDay();
+    const now = /* @__PURE__ */ new Date();
+    const dhakaOffset = 6 * 60;
+    const nowInDhaka = new Date(now.getTime() + (dhakaOffset + now.getTimezoneOffset()) * 6e4);
+    const dayOfWeek = nowInDhaka.getDay();
     const diff = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
-    startDate = new Date(today);
-    startDate.setUTCDate(today.getUTCDate() + diff);
+    nowInDhaka.setDate(nowInDhaka.getDate() + diff);
+    const yyyy = nowInDhaka.getFullYear();
+    const mm = String(nowInDhaka.getMonth() + 1).padStart(2, "0");
+    const dd = String(nowInDhaka.getDate()).padStart(2, "0");
+    startDate = /* @__PURE__ */ new Date(`${yyyy}-${mm}-${dd}T00:00:00.000Z`);
   }
-  startDate.setUTCHours(0, 0, 0, 0);
   const endDate = new Date(startDate);
   endDate.setUTCDate(startDate.getUTCDate() + 6);
   endDate.setUTCHours(23, 59, 59, 999);
@@ -1046,6 +1015,10 @@ var updateProfile3 = async (userId, data) => {
   });
 };
 var getProfile3 = async (userId) => {
+  const today = /* @__PURE__ */ new Date();
+  today.setUTCHours(0, 0, 0, 0);
+  const nextWeek = new Date(today);
+  nextWeek.setUTCDate(today.getUTCDate() + 7);
   const profile = await prisma.tutor_profile.findUnique({
     where: { userId },
     include: {
@@ -1061,15 +1034,26 @@ var getProfile3 = async (userId) => {
           }
         }
       },
-      availability_slot: true
+      // 🚀 PERFORMANCE FIX: Only fetch the next 7 days of slots, not the whole history!
+      availability_slot: {
+        where: {
+          specificDate: {
+            gte: today,
+            lte: nextWeek
+          }
+        },
+        orderBy: {
+          specificDate: "asc"
+        }
+      }
     }
   });
   if (!profile) {
     return null;
   }
   const [stats, reviews] = await Promise.all([
-    getRatingStats(userId).catch(() => null),
-    getReviews3(userId, { page: 1, limit: 10 }).catch(() => null)
+    getRatingStats(profile.id).catch(() => null),
+    getReviews3(profile.id, { page: 1, limit: 10 }).catch(() => null)
   ]);
   return {
     ...profile,
@@ -1136,13 +1120,7 @@ var getTeachingSessions = async (userId, options) => {
     }
   };
 };
-var getReviews3 = async (userId, options) => {
-  const tutorProfile = await prisma.tutor_profile.findUnique({
-    where: { userId }
-  });
-  if (!tutorProfile) {
-    throw new Error("Tutor profile not found");
-  }
+var getReviews3 = async (tutorProfileId, options) => {
   const paginationHelper = paginationSortingHelper_default({
     page: options.page,
     limit: options.limit,
@@ -1151,7 +1129,7 @@ var getReviews3 = async (userId, options) => {
   });
   const whereClause = {
     booking: {
-      tutorProfileId: tutorProfile.id
+      tutorProfileId
     }
   };
   if (options.rating) {
@@ -1196,19 +1174,13 @@ var getReviews3 = async (userId, options) => {
     }
   };
 };
-var getRatingStats = async (userId) => {
-  const tutorProfile = await prisma.tutor_profile.findUnique({
-    where: { userId }
-  });
-  if (!tutorProfile) {
-    throw new Error("Tutor profile not found");
-  }
+var getRatingStats = async (tutorProfileId) => {
   const [ratingDistribution, totalReviews, averageRating] = await Promise.all([
     prisma.review.groupBy({
       by: ["rating"],
       where: {
         booking: {
-          tutorProfileId: tutorProfile.id
+          tutorProfileId
         }
       },
       _count: {
@@ -1221,14 +1193,14 @@ var getRatingStats = async (userId) => {
     prisma.review.count({
       where: {
         booking: {
-          tutorProfileId: tutorProfile.id
+          tutorProfileId
         }
       }
     }),
     prisma.review.aggregate({
       where: {
         booking: {
-          tutorProfileId: tutorProfile.id
+          tutorProfileId
         }
       },
       _avg: {
@@ -1261,6 +1233,9 @@ var updateBookingStatus = async (userId, bookingId, data) => {
     where: {
       id: bookingId,
       tutorProfileId: tutorProfile.id
+    },
+    include: {
+      availability_slot: true
     }
   });
   if (!booking) {
@@ -1272,21 +1247,29 @@ var updateBookingStatus = async (userId, bookingId, data) => {
   if (booking.status === "CANCELLED") {
     throw new Error("Cannot update cancelled booking");
   }
-  return await prisma.booking.update({
-    where: { id: bookingId },
-    data: {
-      status: data.status,
-      updatedAt: /* @__PURE__ */ new Date()
-    },
-    include: {
-      user: {
-        select: {
-          id: true,
-          name: true,
-          email: true
+  return await prisma.$transaction(async (tx) => {
+    if (data.status === "CANCELLED" && booking.availabilitySlotId && booking.availability_slot && !booking.availability_slot.isRecurring) {
+      await tx.availability_slot.update({
+        where: { id: booking.availabilitySlotId },
+        data: { isBooked: false }
+      });
+    }
+    return await tx.booking.update({
+      where: { id: bookingId },
+      data: {
+        status: data.status,
+        updatedAt: /* @__PURE__ */ new Date()
+      },
+      include: {
+        user: {
+          select: {
+            id: true,
+            name: true,
+            email: true
+          }
         }
       }
-    }
+    });
   });
 };
 var updateAvailabilitySlots = async (userId, data) => {
@@ -1332,22 +1315,22 @@ var updateAvailabilitySlots = async (userId, data) => {
     return true;
   });
   console.log("One-hour chunks to insert:", dedupedChunks);
-  function nowInBangladesh() {
-    return new Date(
-      (/* @__PURE__ */ new Date()).toLocaleString("en-US", { timeZone: "Asia/Dhaka" })
-    );
+  function getNowInDhaka() {
+    return new Date((/* @__PURE__ */ new Date()).toLocaleString("en-US", { timeZone: "Asia/Dhaka" }));
   }
-  const now = nowInBangladesh();
-  let isEverythingInFutureInLocalDateAndTime = true;
+  const now = getNowInDhaka();
+  let hasPastSlots = false;
   for (const chunk of dedupedChunks) {
-    const slotDate = /* @__PURE__ */ new Date(chunk.date + "T" + chunk.startTime + ":00.000Z");
-    if (slotDate < now) {
-      isEverythingInFutureInLocalDateAndTime = false;
+    const [h, m] = chunk.startTime.split(":").map(Number);
+    const [year, month, day] = chunk.date.split("-").map(Number);
+    const slotInDhakaContext = new Date(year, month - 1, day, h, m);
+    if (slotInDhakaContext < now) {
+      hasPastSlots = true;
       break;
     }
   }
-  if (!isEverythingInFutureInLocalDateAndTime) {
-    throw new Error("All time slots must be in the future");
+  if (hasPastSlots) {
+    throw new Error("please dont set past dates");
   }
   const createdAndExisting = await prisma.$transaction(async (tx) => {
     await tx.availability_slot.deleteMany({
@@ -1434,7 +1417,7 @@ var createProfile2 = async (req, res, next) => {
         message: "User not authenticated"
       });
     }
-    const { prisma: prisma2 } = await import("./prisma-2K7BFZRA.js");
+    const { prisma: prisma2 } = await import("./prisma-P6KLVRZA.js");
     const existingProfile = await prisma2.tutor_profile.findUnique({
       where: { userId: req.user.id }
     });
@@ -1612,14 +1595,13 @@ var TutorController = {
 
 // src/modules/tutor/tutor.route.ts
 var router2 = Router2();
-router2.post("/profile", auth_default(), TutorController.createProfile);
-router2.get("/profile", auth_default(), TutorController.getProfile);
+router2.post("/profile", auth_default("STUDENT" /* STUDENT */), TutorController.createProfile);
+router2.get("/profile", auth_default("TUTOR" /* TUTOR */), TutorController.getProfile);
 router2.patch("/profile", auth_default("TUTOR" /* TUTOR */), TutorController.updateProfile);
 router2.get("/availability-slots", auth_default("TUTOR" /* TUTOR */), TutorController.getAvailabilitySlots);
 router2.put(
   "/availability-slots",
   auth_default("TUTOR" /* TUTOR */),
-  // validateRequest(updateAvailabilitySlotsSchema),
   TutorController.updateAvailabilitySlots
 );
 router2.get("/sessions", auth_default("TUTOR" /* TUTOR */), TutorController.getTeachingSessions);
@@ -1632,8 +1614,36 @@ var TutorRoutes = router2;
 import { Router as Router3 } from "express";
 
 // src/modules/public/public.service.ts
+import { createHash } from "crypto";
 var PublicService = class {
   static async searchTutors(filters, paginationOptions) {
+    const sortBy = paginationOptions?.orderBy && Object.keys(paginationOptions.orderBy)[0] || "averageRating";
+    const sortOrder = paginationOptions?.orderBy?.[sortBy] || "desc";
+    const cacheTtlSeconds = Number(process.env.PUBLIC_TUTOR_SEARCH_CACHE_TTL_SECONDS ?? 30);
+    const cacheKeyPayload = {
+      subject: filters.subject ?? "",
+      category: filters.category ?? "",
+      minRating: filters.minRating ?? null,
+      maxRating: filters.maxRating ?? null,
+      minPrice: filters.minPrice ?? null,
+      maxPrice: filters.maxPrice ?? null,
+      minTotalReviews: filters.minTotalReviews ?? null,
+      searchTerm: filters.searchTerm ?? "",
+      skip: paginationOptions.skip,
+      take: paginationOptions.take,
+      sortBy,
+      sortOrder
+    };
+    const cacheKeyHash = createHash("sha256").update(JSON.stringify(cacheKeyPayload)).digest("hex");
+    const cacheKey = `public:tutors:search:v1:${cacheKeyHash}`;
+    if (cacheTtlSeconds > 0) {
+      try {
+        const cached = await redis_default.get(cacheKey);
+        if (cached) return JSON.parse(cached);
+      } catch (err) {
+        console.warn("[PublicService.searchTutors] Redis cache read failed:", err);
+      }
+    }
     const whereClause = {
       isAvailable: true,
       user: {
@@ -1738,20 +1748,24 @@ var PublicService = class {
               }
             ]
           },
-          include: {
+          select: {
+            id: true,
+            userId: true,
+            averageRating: true,
+            totalReviews: true,
+            bio: true,
+            hourlyRate: true,
+            isFeatured: true,
             user: {
               select: {
-                id: true,
                 name: true,
                 image: true
               }
             },
             tutor_subject: {
-              include: {
+              select: {
                 subject: {
-                  include: {
-                    category: true
-                  }
+                  select: { name: true }
                 }
               }
             }
@@ -1762,8 +1776,20 @@ var PublicService = class {
       ]);
       const totalPages = Math.ceil(total / paginationOptions.take);
       const currentPage = Math.floor(paginationOptions.skip / paginationOptions.take) + 1;
-      return {
-        data: tutors,
+      const formattedTutors = tutors.map((tutor) => ({
+        id: tutor.id,
+        userId: tutor.userId,
+        name: tutor.user.name,
+        profilePic: tutor.user.image,
+        avgRating: tutor.averageRating,
+        totalReviews: tutor.totalReviews,
+        bio: tutor.bio,
+        hourlyRate: tutor.hourlyRate,
+        subjects: tutor.tutor_subject.map((ts) => ts.subject.name),
+        isFeatured: tutor.isFeatured
+      }));
+      const response = {
+        data: formattedTutors,
         meta: {
           total,
           page: currentPage,
@@ -1771,6 +1797,14 @@ var PublicService = class {
           totalPages
         }
       };
+      if (cacheTtlSeconds > 0) {
+        try {
+          await redis_default.setEx(cacheKey, cacheTtlSeconds, JSON.stringify(response));
+        } catch (err) {
+          console.warn("[PublicService.searchTutors] Redis cache write failed:", err);
+        }
+      }
+      return response;
     } catch (error) {
       console.error("[PublicService] Error in searchTutors query:", error);
       throw error;
@@ -1933,7 +1967,9 @@ var PublicService = class {
   }
   static async getAllCategories() {
     return await prisma.category.findMany({
-      where: {},
+      where: {
+        status: "ACTIVE"
+      },
       include: {
         subject: {
           orderBy: {
@@ -1967,13 +2003,15 @@ var PublicService = class {
     if (weekStartDate) {
       startDate = /* @__PURE__ */ new Date(weekStartDate + "T00:00:00.000Z");
     } else {
-      const today = /* @__PURE__ */ new Date();
-      const dayOfWeek = today.getUTCDay();
+      const nowInDhaka2 = new Date((/* @__PURE__ */ new Date()).toLocaleString("en-US", { timeZone: "Asia/Dhaka" }));
+      const dayOfWeek = nowInDhaka2.getDay();
       const diff = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
-      startDate = new Date(today);
-      startDate.setUTCDate(today.getUTCDate() + diff);
+      nowInDhaka2.setDate(nowInDhaka2.getDate() + diff);
+      const yyyy = nowInDhaka2.getFullYear();
+      const mm = String(nowInDhaka2.getMonth() + 1).padStart(2, "0");
+      const dd = String(nowInDhaka2.getDate()).padStart(2, "0");
+      startDate = /* @__PURE__ */ new Date(`${yyyy}-${mm}-${dd}T00:00:00.000Z`);
     }
-    startDate.setUTCHours(0, 0, 0, 0);
     const endDate = new Date(startDate);
     endDate.setUTCDate(startDate.getUTCDate() + 6);
     endDate.setUTCHours(23, 59, 59, 999);
@@ -1999,7 +2037,21 @@ var PublicService = class {
       5: "FRIDAY",
       6: "SATURDAY"
     };
-    const resultSlots = slots.filter((s) => s.specificDate != null).map((s) => {
+    const nowInDhaka = new Date((/* @__PURE__ */ new Date()).toLocaleString("en-US", { timeZone: "Asia/Dhaka" }));
+    const resultSlots = slots.filter((s) => {
+      if (!s.specificDate) return false;
+      const dateStr = s.specificDate.toISOString().split("T")[0];
+      if (!dateStr) return false;
+      const timeParts = s.startTime.split(":");
+      const h = parseInt(timeParts[0] || "0", 10);
+      const m = parseInt(timeParts[1] || "0", 10);
+      const dateParts = dateStr.split("-");
+      const year = parseInt(dateParts[0] || "0", 10);
+      const month = parseInt(dateParts[1] || "0", 10);
+      const day = parseInt(dateParts[2] || "0", 10);
+      const slotInDhaka = new Date(year, month - 1, day, h, m);
+      return !s.isBooked && slotInDhaka >= nowInDhaka;
+    }).map((s) => {
       const dateKey = s.specificDate.toISOString().split("T")[0];
       return {
         id: `${dateKey}-${s.startTime}-${s.endTime}`,
@@ -2374,6 +2426,12 @@ var getUsers = async (options) => {
   if (options.status) {
     whereClause.status = options.status;
   }
+  if (options.search) {
+    whereClause.OR = [
+      { name: { contains: options.search, mode: "insensitive" } },
+      { email: { contains: options.search, mode: "insensitive" } }
+    ];
+  }
   const [users, total] = await Promise.all([
     prisma.user.findMany({
       where: whereClause,
@@ -2463,6 +2521,24 @@ var getAllBookings = async (options) => {
       whereClause.status = options.status;
     }
   }
+  if (options.search) {
+    whereClause.OR = [
+      { subject: { contains: options.search, mode: "insensitive" } },
+      { id: { contains: options.search, mode: "insensitive" } },
+      {
+        user: {
+          name: { contains: options.search, mode: "insensitive" }
+        }
+      },
+      {
+        tutor_profile: {
+          user: {
+            name: { contains: options.search, mode: "insensitive" }
+          }
+        }
+      }
+    ];
+  }
   try {
     const [bookings, total] = await Promise.all([
       prisma.booking.findMany({
@@ -2515,23 +2591,19 @@ var getAllBookings = async (options) => {
 };
 var getPlatformStats = async () => {
   const [userStats, bookingStats, revenueStats, recentActivity] = await Promise.all([
-    // User statistics
     prisma.user.groupBy({
       by: ["role"],
       _count: { role: true }
     }),
-    // Booking statistics
     prisma.booking.groupBy({
       by: ["status"],
       _count: { status: true }
     }),
-    // Revenue statistics
     prisma.booking.aggregate({
       where: { status: "COMPLETED" },
       _sum: { price: true },
       _count: { id: true }
     }),
-    // Recent activity (last 7 days)
     Promise.all([
       prisma.user.count({
         where: {
@@ -2622,12 +2694,13 @@ var login2 = async (req, res, next) => {
 };
 var getUsers2 = async (req, res, next) => {
   try {
-    const { page = 1, limit = 10, role, status } = req.query;
+    const { page = 1, limit = 10, role, status, search } = req.query;
     const result = await AdminService.getUsers({
       page: Number(page),
       limit: Number(limit),
       role,
-      status
+      status,
+      search
     });
     res.status(200).json({
       success: true,
@@ -2706,11 +2779,12 @@ var getAllBookings2 = async (req, res, next) => {
         }
       });
     }
-    const { page = 1, limit = 10, status } = req.query;
+    const { page = 1, limit = 10, status, search } = req.query;
     const result = await AdminService.getAllBookings({
       page: Number(page),
       limit: Number(limit),
-      status
+      status,
+      search
     });
     res.status(200).json({
       success: true,
@@ -3307,6 +3381,174 @@ var CategoryRoutes = router5;
 // src/app.ts
 import hpp from "hpp";
 import { rateLimit } from "express-rate-limit";
+import cookieParser from "cookie-parser";
+
+// src/modules/auth/auth.routes.ts
+import { Router as Router6 } from "express";
+
+// src/modules/auth/auth.controller.ts
+var COOKIE_NAME = "sessionId";
+var COOKIE_OPTIONS = {
+  httpOnly: true,
+  secure: process.env.NODE_ENV === "production",
+  sameSite: "strict",
+  maxAge: 7 * 24 * 60 * 60 * 1e3,
+  // 7 days
+  path: "/"
+};
+var login3 = async (req, res, next) => {
+  try {
+    const { email, password } = req.body;
+    const user = await prisma.user.findUnique({ where: { email } });
+    if (!user) {
+      return res.status(401).json({ success: false, message: "Invalid credentials" });
+    }
+    const sessionId = await sessionService.create(
+      user.id,
+      user.email,
+      user.role,
+      user.emailVerified,
+      user.name,
+      {
+        userAgent: req.headers["user-agent"] || "unknown",
+        ip: req.ip || req.socket.remoteAddress || "unknown",
+        deviceId: req.body.deviceId
+      }
+    );
+    res.cookie(COOKIE_NAME, sessionId, COOKIE_OPTIONS);
+    res.json({
+      success: true,
+      message: "Login successful",
+      data: { userId: user.id, email: user.email, role: user.role }
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+var logout = async (req, res, next) => {
+  try {
+    const sessionId = req.cookies[COOKIE_NAME] || req.cookies["better-auth.session_token"];
+    if (sessionId) {
+      await sessionService.delete(sessionId);
+      try {
+        const { auth: betterAuth } = await import("./auth-LITCF3FX.js");
+        await betterAuth.api.signOut({
+          headers: req.headers
+        });
+      } catch (authError) {
+        console.error("Better-Auth Signout Error:", authError);
+      }
+    }
+    res.clearCookie(COOKIE_NAME, { path: "/" });
+    res.clearCookie("better-auth.session_token", { path: "/" });
+    res.json({ success: true, message: "Logout successful" });
+  } catch (error) {
+    next(error);
+  }
+};
+var logoutAll = async (req, res, next) => {
+  try {
+    const userId = req.user?.id;
+    if (!userId) {
+      return res.status(401).json({ success: false, message: "Unauthorized" });
+    }
+    await sessionService.deleteAllUserSessions(userId);
+    res.clearCookie(COOKIE_NAME, { path: "/" });
+    res.json({ success: true, message: "All sessions terminated" });
+  } catch (error) {
+    next(error);
+  }
+};
+var getSessions = async (req, res, next) => {
+  try {
+    const userId = req.user?.id;
+    if (!userId) {
+      return res.status(401).json({ success: false, message: "Unauthorized" });
+    }
+    const sessions = await sessionService.getUserSessions(userId);
+    res.json({ success: true, data: sessions });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// src/middleware/sessionAuth.ts
+var sessionAuth = async (req, res, next) => {
+  try {
+    const rawToken = req.headers.authorization?.split(" ")[1] || req.cookies["better-auth.session_token"] || req.cookies.sessionId;
+    if (!rawToken) {
+      return res.status(401).json({ success: false, message: "No session found" });
+    }
+    let sessionData = null;
+    try {
+      sessionData = await sessionService.get(rawToken);
+    } catch (redisError) {
+      console.error("Redis Cache Error:", redisError);
+    }
+    if (!sessionData) {
+      const { auth: betterAuth } = await import("./auth-LITCF3FX.js");
+      const dbSession = await betterAuth.api.getSession({
+        headers: req.headers
+      });
+      if (!dbSession) {
+        res.clearCookie("sessionId", { path: "/" });
+        res.clearCookie("better-auth.session_token", { path: "/" });
+        return res.status(401).json({ success: false, message: "Invalid or expired session" });
+      }
+      try {
+        await sessionService.create(
+          dbSession.user.id,
+          dbSession.user.email,
+          dbSession.user.role,
+          dbSession.user.emailVerified,
+          dbSession.user.name,
+          {
+            userAgent: req.headers["user-agent"] || "unknown",
+            ip: req.ip || "unknown"
+          },
+          rawToken
+        );
+      } catch (e) {
+        console.error("Failed to hydrate Redis:", e);
+      }
+      sessionData = {
+        userId: dbSession.user.id,
+        email: dbSession.user.email,
+        role: dbSession.user.role,
+        emailVerified: dbSession.user.emailVerified,
+        name: dbSession.user.name,
+        sessionId: rawToken,
+        metadata: {
+          userAgent: req.headers["user-agent"] || "unknown",
+          ip: req.ip || "unknown",
+          createdAt: (/* @__PURE__ */ new Date()).toISOString(),
+          lastAccessedAt: (/* @__PURE__ */ new Date()).toISOString()
+        }
+      };
+    }
+    req.user = {
+      id: sessionData.userId,
+      email: sessionData.email,
+      role: sessionData.role,
+      emailVerified: sessionData.emailVerified,
+      name: sessionData.name
+    };
+    req.sessionId = rawToken;
+    next();
+  } catch (error) {
+    next(error);
+  }
+};
+
+// src/modules/auth/auth.routes.ts
+var router6 = Router6();
+router6.post("/login", login3);
+router6.post("/logout", logout);
+router6.post("/logout-all", sessionAuth, logoutAll);
+router6.get("/sessions", sessionAuth, getSessions);
+var authRoutes = router6;
+
+// src/app.ts
 var app = express();
 app.set("trust proxy", true);
 app.use(cors({
@@ -3331,20 +3573,23 @@ var limiter = rateLimit({
 if (process.env.NODE_ENV === "production") {
   app.use(limiter);
 }
+app.use(cookieParser());
 app.use(express.json({ limit: "10kb" }));
 app.use(hpp());
-app.all("/api/auth/{*any}", toNodeHandler(auth));
+app.all("/api/auth", toNodeHandler(auth));
+app.all("/api/auth/*rest", toNodeHandler(auth));
 app.use("/api/public", PublicRoutes);
 app.use("/api/student", StudentRoutes);
 app.use("/api/tutor", TutorRoutes);
 app.use("/api/admin", AdminRoutes);
 app.use("/api/admin", CategoryRoutes);
 app.get("/", (req, res) => {
-  res.send("Hello, World!");
-});
-app.get("/health", (req, res) => {
   res.status(200).json({ status: "ok", message: "Server is healthy" });
 });
+app.use("/api/session-auth", authRoutes);
+var initializeAppServices = async () => {
+  await connectRedis();
+};
 app.use(notFound);
 app.use(globalErrorHandler_default);
 var app_default = app;
@@ -3353,12 +3598,29 @@ var app_default = app;
 var PORT = process.env.PORT || 1e4;
 async function bootstrap() {
   try {
+    await initializeAppServices();
+    console.log("\u2705 Services initialized (Kafka, Redis).");
     console.log("Connected to the database successfully.");
-    app_default.listen(PORT, () => {
-      console.log(`Server is running on port ${PORT}`);
+    const server = app_default.listen(PORT, () => {
+      console.log(`\u{1F680} Server is running on port ${PORT}`);
     });
+    const shutdown = async (signal) => {
+      console.log(`
+Received ${signal}. Starting graceful shutdown...`);
+      server.close(async () => {
+        console.log("HTTP server closed.");
+        try {
+          process.exit(0);
+        } catch (err) {
+          console.error("Error during Kafka shutdown:", err);
+          process.exit(1);
+        }
+      });
+    };
+    process.on("SIGTERM", () => shutdown("SIGTERM"));
+    process.on("SIGINT", () => shutdown("SIGINT"));
   } catch (error) {
-    console.error("An error occurred during bootstrap:", error);
+    console.error("\u274C An error occurred during bootstrap:", error);
     process.exit(1);
   }
 }

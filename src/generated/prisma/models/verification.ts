@@ -982,6 +982,11 @@ export type verificationFindManyArgs<ExtArgs extends runtime.Types.Extensions.In
    * Skip the first `n` verifications.
    */
   skip?: number
+  /**
+   * {@link https://www.prisma.io/docs/concepts/components/prisma-client/distinct Distinct Docs}
+   * 
+   * Filter by unique combinations of verifications.
+   */
   distinct?: Prisma.VerificationScalarFieldEnum | Prisma.VerificationScalarFieldEnum[]
 }
 
