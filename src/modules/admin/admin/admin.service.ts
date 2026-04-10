@@ -259,7 +259,10 @@ const getAllBookings = async (options: { page: number; limit: number; status?: s
 };
 
 const getPlatformStats = async () => {
-  const [userStats, bookingStats, revenueStats, recentActivity] = await Promise.all([
+  const sixMonthsAgo = new Date();
+  sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
+
+  const [userStats, bookingStats, revenueStats, monthlyUsers, monthlyRevenue] = await Promise.all([
     prisma.user.groupBy({
       by: ['role'],
       _count: { role: true }
@@ -273,23 +276,42 @@ const getPlatformStats = async () => {
       _sum: { price: true },
       _count: { id: true }
     }),
-    Promise.all([
-      prisma.user.count({
-        where: {
-          createdAt: {
-            gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)
-          }
-        }
-      }),
-      prisma.booking.count({
-        where: {
-          createdAt: {
-            gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)
-          }
-        }
-      })
-    ])
+    prisma.user.findMany({
+      where: { createdAt: { gte: sixMonthsAgo } },
+      select: { createdAt: true }
+    }),
+    prisma.booking.findMany({
+      where: { status: 'COMPLETED', scheduledAt: { gte: sixMonthsAgo } },
+      select: { scheduledAt: true, price: true }
+    })
   ]);
+
+  const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+  
+  // Helper to initialize last 6 months
+  const getLastSixMonths = () => {
+    const months = [];
+    for (let i = 5; i >= 0; i--) {
+      const d = new Date();
+      d.setMonth(d.getMonth() - i);
+      months.push(monthNames[d.getMonth()]);
+    }
+    return months;
+  };
+
+  const months = getLastSixMonths();
+  const growthMap = months.reduce((acc, m) => ({ ...acc, [m!]: 0 }), {} as any);
+  const revenueMap = months.reduce((acc, m) => ({ ...acc, [m!]: 0 }), {} as any);
+
+  monthlyUsers.forEach(u => {
+    const m = monthNames[new Date(u.createdAt).getMonth()];
+    if (growthMap[m!] !== undefined) growthMap[m!]++;
+  });
+
+  monthlyRevenue.forEach(b => {
+    const m = monthNames[new Date(b.scheduledAt).getMonth()];
+    if (revenueMap[m!] !== undefined) revenueMap[m!] += b.price;
+  });
 
   const usersByRole = userStats.reduce((acc, curr) => {
     acc[curr.role.toLowerCase()] = curr._count.role;
@@ -302,20 +324,20 @@ const getPlatformStats = async () => {
   }, {} as any);
 
   return {
-    users: {
-      total: userStats.reduce((sum, curr) => sum + curr._count.role, 0),
-      byRole: usersByRole,
-      newThisWeek: recentActivity[0]
+    overview: {
+      totalUsers: userStats.reduce((sum, curr) => sum + curr._count.role, 0),
+      totalRevenue: revenueStats._sum.price || 0,
+      totalBookings: bookingStats.reduce((sum, curr) => sum + curr._count.status, 0),
+      successRate: revenueStats._count.id > 0 ? Math.round((revenueStats._count.id / (bookingStats.find(b => b.status === 'COMPLETED')?._count.status || 1)) * 100) : 0
     },
-    bookings: {
-      total: bookingStats.reduce((sum, curr) => sum + curr._count.status, 0),
-      byStatus: bookingsByStatus,
-      newThisWeek: recentActivity[1]
+    charts: {
+      userGrowth: Object.entries(growthMap).map(([month, count]) => ({ month, count })),
+      revenueGrowth: Object.entries(revenueMap).map(([month, amount]) => ({ month, amount })),
+      roleDistribution: userStats.map(s => ({ name: s.role, value: s._count.role })),
+      bookingDistribution: bookingStats.map(s => ({ name: s.status, value: s._count.status }))
     },
-    revenue: {
-      total: revenueStats._sum.price || 0,
-      completedBookings: revenueStats._count.id
-    }
+    byRole: usersByRole,
+    byStatus: bookingsByStatus
   };
 };
 
@@ -404,6 +426,44 @@ const verifyTutor = async (tutorProfileId: string) => {
   });
 };
 
+const getAdminProfile = async (userId: string) => {
+  return await prisma.user.findUnique({
+    where: { id: userId },
+    select: {
+      id: true,
+      name: true,
+      email: true,
+      role: true,
+      image: true,
+      phone: true,
+      address: true,
+      status: true,
+      createdAt: true
+    }
+  });
+};
+
+const updateAdminProfile = async (userId: string, data: any) => {
+  return await prisma.user.update({
+    where: { id: userId },
+    data: {
+      name: data.name,
+      image: data.image,
+      phone: data.phone,
+      address: data.address
+    },
+    select: {
+      id: true,
+      name: true,
+      email: true,
+      role: true,
+      image: true,
+      phone: true,
+      address: true
+    }
+  });
+};
+
 export const AdminService = { 
   login, 
   getUsers, 
@@ -411,5 +471,7 @@ export const AdminService = {
   getAllBookings, 
   cancelBooking, 
   getPlatformStats,
-  verifyTutor
+  verifyTutor,
+  getAdminProfile,
+  updateAdminProfile
 };

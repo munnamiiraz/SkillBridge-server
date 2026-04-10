@@ -192,6 +192,32 @@ const verifyTutor = async (req: Request, res: Response, next: NextFunction) => {
   }
 };
 
+const getProfile = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const result = await AdminService.getAdminProfile(req.user!.id);
+    res.status(200).json({
+      success: true,
+      message: "Admin profile retrieved successfully",
+      data: result
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+const updateProfile = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const result = await AdminService.updateAdminProfile(req.user!.id, req.body);
+    res.status(200).json({
+      success: true,
+      message: "Admin profile updated successfully",
+      data: result
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
 export const AdminController = { 
   login, 
   getUsers, 
@@ -201,5 +227,7 @@ export const AdminController = {
   getAllBookings, 
   cancelBooking, 
   getPlatformStats,
-  verifyTutor
+  verifyTutor,
+  getProfile,
+  updateProfile
 };

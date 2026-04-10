@@ -1,10 +1,12 @@
 generator client {
-  provider = "prisma-client"
-  output   = "../src/generated/prisma"
+  provider        = "prisma-client-js"
+  output          = "../src/generated/prisma"
+  previewFeatures = ["postgresqlExtensions"]
 }
 
 datasource db {
-  provider = "postgresql"
+  provider   = "postgresql"
+  extensions = [vector]
 }
 
 model account {
@@ -142,6 +144,7 @@ model tutor_profile {
   verifiedAt        DateTime?
   isFeatured        Boolean             @default(false)
   banner            String?
+  embedding         Unsupported("vector(1536)")?
   createdAt         DateTime            @default(now())
   updatedAt         DateTime            @updatedAt
   availability_slot availability_slot[]
@@ -201,6 +204,17 @@ model verification {
   updatedAt  DateTime @updatedAt
 
   @@index([identifier])
+}
+
+model knowledge_base {
+  id        String                      @id @default(uuid())
+  content   String                      @db.Text
+  embedding Unsupported("vector(1536)")?
+  metadata  Json?
+  createdAt DateTime                    @default(now())
+  updatedAt DateTime                    @updatedAt
+
+  @@map("knowledge_base")
 }
 
 enum BookingStatus {

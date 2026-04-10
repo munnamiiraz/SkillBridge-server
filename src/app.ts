@@ -10,6 +10,7 @@ import { TutorRoutes } from "./modules/tutor/tutor.route.js";
 import { PublicRoutes } from "./modules/public/public.route.js";
 import { AdminRoutes } from "./modules/admin/admin/admin.route.js";
 import { CategoryRoutes } from "./modules/admin/category/category.routes.js";
+import { AIRoutes } from "./modules/ai/ai.route.js";
 import UploadRoutes from "./modules/upload/upload.route.js";
 import helmet from "helmet";
 import hpp from "hpp";
@@ -78,6 +79,7 @@ app.use("/api/student", StudentRoutes);
 app.use("/api/tutor", TutorRoutes);
 app.use("/api/admin", AdminRoutes);
 app.use("/api/admin", CategoryRoutes);
+app.use("/api/ai", AIRoutes);
 
 // app.get("/api/test-kafka", async (req, res) => {
 //     try {

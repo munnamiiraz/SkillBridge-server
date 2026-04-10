@@ -1,0 +1,245 @@
+generator client {
+  provider        = "prisma-client-js"
+  output          = "../src/generated/prisma"
+  previewFeatures = ["postgresqlExtensions"]
+}
+
+datasource db {
+  provider   = "postgresql"
+  extensions = [vector]
+}
+
+model account {
+  id                    String    @id
+  accountId             String
+  providerId            String
+  userId                String
+  accessToken           String?
+  refreshToken          String?
+  idToken               String?
+  accessTokenExpiresAt  DateTime?
+  refreshTokenExpiresAt DateTime?
+  scope                 String?
+  password              String?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+  user                  user      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([providerId, accountId])
+}
+
+model availability_slot {
+  id             String        @id
+  tutorProfileId String
+  dayOfWeek      Int
+  startTime      String
+  endTime        String
+  isRecurring    Boolean       @default(true)
+  specificDate   DateTime?
+  isBooked       Boolean       @default(false)
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+  tutor_profile  tutor_profile @relation(fields: [tutorProfileId], references: [id], onDelete: Cascade)
+  booking        booking[]
+
+  @@index([tutorProfileId])
+  @@index([dayOfWeek])
+  @@index([tutorProfileId, dayOfWeek, isBooked])
+}
+
+model booking {
+  id                 String             @id
+  studentId          String
+  tutorProfileId     String
+  availabilitySlotId String?
+  scheduledAt        DateTime
+  duration           Int                @default(60)
+  status             BookingStatus      @default(PENDING)
+  subject            String?
+  notes              String?
+  meetingLink        String?
+  price              Float
+  createdAt          DateTime           @default(now())
+  updatedAt          DateTime           @updatedAt
+  user               user               @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  tutor_profile      tutor_profile      @relation(fields: [tutorProfileId], references: [id], onDelete: Cascade)
+  availability_slot  availability_slot? @relation(fields: [availabilitySlotId], references: [id], onDelete: SetNull)
+  review             review?
+
+  @@index([studentId])
+  @@index([tutorProfileId])
+  @@index([availabilitySlotId])
+  @@index([status])
+  @@index([scheduledAt])
+  @@index([tutorProfileId, status])
+  @@index([studentId, status])
+}
+
+model category {
+  id          String         @id @default(uuid())
+  name        String         @unique
+  description String?
+  status      CategoryStatus @default(ACTIVE)
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+  subject     subject[]
+}
+
+model review {
+  id        String   @id
+  bookingId String   @unique
+  studentId String
+  rating    Int
+  comment   String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  booking   booking  @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  user      user     @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@index([studentId])
+}
+
+model session {
+  id        String   @id
+  expiresAt DateTime
+  token     String   @unique
+  ipAddress String?
+  userAgent String?
+  userId    String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  user      user     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model subject {
+  id            String          @id
+  name          String
+  categoryId    String
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+  category      category        @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  tutor_subject tutor_subject[]
+
+  @@unique([name, categoryId])
+  @@index([categoryId])
+}
+
+model tutor_profile {
+  id                String                       @id
+  userId            String                       @unique
+  bio               String?
+  headline          String?
+  hourlyRate        Float
+  address           String?
+  experience        Int                          @default(0)
+  education         String?
+  isAvailable       Boolean                      @default(true)
+  averageRating     Float                        @default(0)
+  totalReviews      Int                          @default(0)
+  totalSessions     Int                          @default(0)
+  isVerified        Boolean                      @default(false)
+  verifiedAt        DateTime?
+  isFeatured        Boolean                      @default(false)
+  banner            String?
+  embedding         Unsupported("vector(1536)")?
+  createdAt         DateTime                     @default(now())
+  updatedAt         DateTime                     @updatedAt
+  availability_slot availability_slot[]
+  booking           booking[]
+  user              user                         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tutor_subject     tutor_subject[]
+
+  @@index([isFeatured])
+  @@index([isAvailable])
+  @@index([averageRating])
+  @@index([isAvailable, isFeatured])
+}
+
+model tutor_subject {
+  id             String        @id
+  tutorProfileId String
+  subjectId      String
+  subject        subject       @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  tutor_profile  tutor_profile @relation(fields: [tutorProfileId], references: [id], onDelete: Cascade)
+
+  @@unique([tutorProfileId, subjectId])
+  @@index([subjectId])
+  @@index([tutorProfileId])
+}
+
+model user {
+  id            String         @id
+  name          String         @default("")
+  phone         String         @default("N/A")
+  email         String         @unique
+  emailVerified Boolean        @default(false)
+  address       String?
+  image         String?
+  coverImage    String?
+  role          Role           @default(STUDENT)
+  status        UserStatus     @default(ACTIVE)
+  banReason     String?
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  account       account[]
+  booking       booking[]
+  review        review[]
+  session       session[]
+  tutor_profile tutor_profile?
+
+  @@index([role])
+  @@index([status])
+  @@index([role, status])
+}
+
+model verification {
+  id         String   @id
+  identifier String
+  value      String
+  expiresAt  DateTime
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([identifier])
+}
+
+model knowledge_base {
+  id        String                       @id @default(uuid())
+  content   String                       @db.Text
+  embedding Unsupported("vector(1536)")?
+  metadata  Json?
+  createdAt DateTime                     @default(now())
+  updatedAt DateTime                     @updatedAt
+
+  @@map("knowledge_base")
+}
+
+enum BookingStatus {
+  PENDING
+  CONFIRMED
+  ONGOING
+  COMPLETED
+  CANCELLED
+}
+
+enum Role {
+  STUDENT
+  TUTOR
+  VERIFIED_TUTOR
+  ADMIN
+  SUPER_ADMIN
+}
+
+enum UserStatus {
+  ACTIVE
+  INACTIVE
+  BANNED
+}
+
+enum CategoryStatus {
+  ACTIVE
+  INACTIVE
+}

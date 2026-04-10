@@ -293,6 +293,17 @@ const getProfile = async (userId: string) => {
     return null;
   }
 
+  // 🚀 REAL-TIME STATS: Calculate actual completed sessions and average rating
+  const [sessionCount, ratingAgg] = await Promise.all([
+    prisma.booking.count({
+      where: { tutorProfileId: profile.id, status: 'COMPLETED' }
+    }),
+    prisma.review.aggregate({
+      where: { booking: { tutorProfileId: profile.id } },
+      _avg: { rating: true }
+    })
+  ]);
+
   // Fetch reviews and stats safely - Pass profile.id directly to avoid redundant queries
   const [stats, reviews] = await Promise.all([
     getRatingStats(profile.id).catch(() => null),
@@ -301,6 +312,8 @@ const getProfile = async (userId: string) => {
 
   return {
     ...profile,
+    totalSessions: sessionCount, // Override with real count
+    averageRating: ratingAgg._avg.rating || 0, // Override with real average
     ratingStats: stats,
     recentReviews: reviews ? reviews.data : []
   };
@@ -526,7 +539,7 @@ const updateBookingStatus = async (userId: string, bookingId: string, data: { st
       });
     }
 
-    return await tx.booking.update({
+    const updatedBooking = await tx.booking.update({
       where: { id: bookingId },
       data: {
         status: data.status as any,
@@ -534,14 +547,32 @@ const updateBookingStatus = async (userId: string, bookingId: string, data: { st
       },
       include: {
         user: {
-          select: {
-            id: true,
-            name: true,
-            email: true
-          }
+          select: { id: true, name: true, email: true }
         }
       }
     });
+
+    // 🚀 NEW: Update Tutor Stats if session is COMPLETED
+    if (data.status === 'COMPLETED') {
+        const completedSessions = await tx.booking.count({
+            where: { tutorProfileId: tutorProfile.id, status: 'COMPLETED' }
+        });
+
+        const ratingAgg = await tx.review.aggregate({
+            where: { booking: { tutorProfileId: tutorProfile.id } },
+            _avg: { rating: true }
+        });
+
+        await tx.tutor_profile.update({
+            where: { id: tutorProfile.id },
+            data: {
+                totalSessions: completedSessions,
+                averageRating: ratingAgg._avg.rating || 0
+            }
+        });
+    }
+
+    return updatedBooking;
   });
 };
 
@@ -733,6 +764,10 @@ const requestVerification = async (userId: string) => {
 
   if (tutorProfile.totalSessions < 10) {
     throw new Error(`Verification requires at least 10 completed sessions. You have ${tutorProfile.totalSessions}.`);
+  }
+
+  if (tutorProfile.averageRating < 4.5) {
+    throw new Error(`Verification requires a minimum average rating of 4.5. Your current rating is ${tutorProfile.averageRating || 0}.`);
   }
 
   // Auto-upgrade for now or mark for admin review
