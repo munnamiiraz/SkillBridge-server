@@ -22,16 +22,18 @@ export const sessionAuth = async (req: Request, res: Response, next: NextFunctio
       return res.status(401).json({ success: false, message: 'No session found' });
     }
 
-    // 1. Check Redis FIRST
+    // 1. Check Redis FIRST (DISABLED)
     let sessionData = null;
+    /*
     try {
       sessionData = await sessionService.get(rawToken);
     } catch (redisError) {
       console.error("Redis Cache Error:", redisError);
     }
+    */
 
-    // 2. CACHE MISS: Fallback to betterAuth DB
-    if (!sessionData) {
+    // 2. Fallback to betterAuth DB
+    // if (!sessionData) {
       const { auth: betterAuth } = await import("../lib/auth.js");
       const dbSession = await betterAuth.api.getSession({
         headers: req.headers as any,
@@ -43,7 +45,8 @@ export const sessionAuth = async (req: Request, res: Response, next: NextFunctio
         return res.status(401).json({ success: false, message: 'Invalid or expired session' });
       }
 
-      // Re-hydrate Redis (we found it in the DB, let's put it back in Redis)
+      // Re-hydrate Redis (DISABLED)
+      /*
       try {
         await sessionService.create(
           dbSession.user.id,
@@ -60,6 +63,7 @@ export const sessionAuth = async (req: Request, res: Response, next: NextFunctio
       } catch (e) {
         console.error("Failed to hydrate Redis:", e);
       }
+      */
 
       // Format sessionData to match what the rest of the app expects from sessionAuth
       sessionData = {
@@ -76,7 +80,7 @@ export const sessionAuth = async (req: Request, res: Response, next: NextFunctio
            lastAccessedAt: new Date().toISOString()
         }
       };
-    }
+    // }
 
     // 3. Populate Req object
     req.user = {

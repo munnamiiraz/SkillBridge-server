@@ -17,9 +17,10 @@ export class PublicController {
       const paginationOptions = {
         skip: paginationHelper.skip,
         take: paginationHelper.limit,
-        orderBy: {
-          [paginationHelper.sortBy]: paginationHelper.sortOrder as "asc" | "desc"
-        }
+        orderBy: [
+          { isVerified: "desc" },
+          { [paginationHelper.sortBy]: paginationHelper.sortOrder as "asc" | "desc" }
+        ]
       };
 
       const filters = {
@@ -144,9 +145,10 @@ export class PublicController {
       const paginationOptions = {
         skip: paginationHelper.skip,
         take: paginationHelper.limit,
-        orderBy: {
-          [paginationHelper.sortBy]: paginationHelper.sortOrder as "asc" | "desc"
-        }
+        orderBy: [
+          { isVerified: "desc" },
+          { [paginationHelper.sortBy]: paginationHelper.sortOrder as "asc" | "desc" }
+        ]
       };
 
       const result = await PublicService.getFeaturedTutors(paginationOptions);
@@ -229,6 +231,22 @@ export class PublicController {
       res.status(500).json({
         success: false,
         message: "Failed to get rating statistics",
+        error: error instanceof Error ? error.message : "Unknown error"
+      });
+    }
+  }
+  static async getPlatformStats(req: Request, res: Response) {
+    try {
+      const result = await PublicService.getPlatformStats();
+      res.json({
+        success: true,
+        message: "Platform statistics retrieved successfully",
+        data: result
+      });
+    } catch (error) {
+      res.status(500).json({
+        success: false,
+        message: "Failed to get platform statistics",
         error: error instanceof Error ? error.message : "Unknown error"
       });
     }

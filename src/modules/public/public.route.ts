@@ -15,5 +15,6 @@ router.get("/tutors/:id/availability", PublicController.getTutorAvailability);
 router.get("/tutors/:id/rating-stats", PublicController.getTutorRatingStats);
 router.get("/reviews", PublicController.getTutorReviews);
 router.get("/categories", PublicController.getCategories);
+router.get("/platform-stats", PublicController.getPlatformStats);
 
 export const PublicRoutes = router;

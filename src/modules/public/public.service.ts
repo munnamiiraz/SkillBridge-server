@@ -1,5 +1,5 @@
 import { prisma } from "../../lib/prisma";
-import redisClient from "../../lib/redis";
+// import redisClient from "../../lib/redis";
 import { createHash } from "crypto";
 import { performance } from "node:perf_hooks";
 
@@ -25,9 +25,13 @@ export class PublicService {
     const debugPerf = process.env.DEBUG_PUBLIC_TUTOR_SEARCH === "true";
     const t0 = debugPerf ? performance.now() : 0;
 
-    const sortBy =
-      (paginationOptions?.orderBy && Object.keys(paginationOptions.orderBy)[0]) || "averageRating";
-    const sortOrder = paginationOptions?.orderBy?.[sortBy] || "desc";
+    const orderBy = paginationOptions?.orderBy;
+    const sortBy = Array.isArray(orderBy) 
+      ? JSON.stringify(orderBy) 
+      : (orderBy && Object.keys(orderBy)[0]) || "averageRating";
+    const sortOrder = Array.isArray(orderBy)
+      ? "complex"
+      : (orderBy?.[sortBy] || "desc");
 
     const cacheTtlSeconds = Number(process.env.PUBLIC_TUTOR_SEARCH_CACHE_TTL_SECONDS ?? 30);
     const cacheKeyPayload = {
@@ -49,6 +53,7 @@ export class PublicService {
       .digest("hex");
     const cacheKey = `public:tutors:search:v1:${cacheKeyHash}`;
 
+    /*
     let cacheHit = false;
     if (cacheTtlSeconds > 0) {
       try {
@@ -66,6 +71,7 @@ export class PublicService {
         console.warn("[PublicService.searchTutors] Redis cache read failed:", err);
       }
     }
+    */
 
     const whereClause: any = {
       isAvailable: true,
@@ -181,22 +187,16 @@ export class PublicService {
               }
             ]
           },
-          select: {
-            id: true,
-            userId: true,
-            averageRating: true,
-            totalReviews: true,
-            bio: true,
-            hourlyRate: true,
-            isFeatured: true,
+          include: {
             user: {
               select: {
                 name: true,
-                image: true
+                image: true,
+                emailVerified: true
               }
             },
             tutor_subject: {
-              select: {
+              include: {
                 subject: {
                   select: { name: true }
                 }
@@ -208,25 +208,11 @@ export class PublicService {
         prisma.tutor_profile.count({ where: whereClause })
       ]);
       
-      
       const totalPages = Math.ceil(total / paginationOptions.take);
       const currentPage = Math.floor(paginationOptions.skip / paginationOptions.take) + 1;
 
-      const formattedTutors = tutors.map(tutor => ({
-        id: tutor.id,
-        userId: tutor.userId,
-        name: tutor.user.name,
-        profilePic: tutor.user.image,
-        avgRating: tutor.averageRating,
-        totalReviews: tutor.totalReviews,
-        bio: tutor.bio,
-        hourlyRate: tutor.hourlyRate,
-        subjects: tutor.tutor_subject.map(ts => ts.subject.name),
-        isFeatured: tutor.isFeatured
-      }));
-
-      const response = {
-        data: formattedTutors,
+      return {
+        data: tutors,
         meta: {
           total,
           page: currentPage,
@@ -235,6 +221,7 @@ export class PublicService {
         }
       };
 
+      /*
       if (cacheTtlSeconds > 0) {
         try {
           await redisClient.setEx(cacheKey, cacheTtlSeconds, JSON.stringify(response));
@@ -242,13 +229,16 @@ export class PublicService {
           console.warn("[PublicService.searchTutors] Redis cache write failed:", err);
         }
       }
+      */
 
+      /*
       if (debugPerf) {
         const ms = Math.round(performance.now() - t0);
         console.log(
           `[PublicService.searchTutors] cache=${cacheHit ? "hit" : "miss"} ttl=${cacheTtlSeconds}s ms=${ms}`
         );
       }
+      */
 
       return response;
     } catch (error) {
@@ -280,7 +270,8 @@ export class PublicService {
             id: true,
             name: true,
             image: true,
-            email: true
+            email: true,
+            emailVerified: true
           }
         },
         tutor_subject: {
@@ -381,7 +372,8 @@ export class PublicService {
             select: {
               id: true,
               name: true,
-              image: true
+              image: true,
+              emailVerified: true
             }
           },
           tutor_subject: {
@@ -594,6 +586,54 @@ export class PublicService {
       totalReviews,
       averageRating: Math.round(averageRating * 10) / 10, // Round to 1 decimal
       distribution
+    };
+  }
+
+  static async getPlatformStats() {
+    const [totalTutors, totalStudents, totalSessions] = await Promise.all([
+      prisma.tutor_profile.count({ where: { user: { status: 'ACTIVE' } } }),
+      prisma.user.count({ where: { role: 'STUDENT', status: 'ACTIVE' } }),
+      prisma.booking.count({ where: { status: 'COMPLETED' } })
+    ]);
+
+    // Monthly growth for the last 6 months
+    const sixMonthsAgo = new Date();
+    sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
+
+    const monthlySessions = await prisma.booking.findMany({
+      where: {
+        status: 'COMPLETED',
+        scheduledAt: { gte: sixMonthsAgo }
+      },
+      select: { scheduledAt: true }
+    });
+
+    const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+    const growthMap: Record<string, number> = {};
+
+    for (let i = 5; i >= 0; i--) {
+      const d = new Date();
+      d.setMonth(d.getMonth() - i);
+      growthMap[monthNames[d.getMonth()]!] = 0;
+    }
+
+    monthlySessions.forEach(s => {
+      const monthKey = monthNames[new Date(s.scheduledAt).getMonth()]!;
+      if (growthMap[monthKey] !== undefined) {
+        growthMap[monthKey]++;
+      }
+    });
+
+    const growth = Object.entries(growthMap).map(([month, count]) => ({
+      month,
+      count
+    }));
+
+    return {
+      totalTutors,
+      totalStudents,
+      totalSessions,
+      growth
     };
   }
 }

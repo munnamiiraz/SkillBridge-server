@@ -11,15 +11,16 @@ export const createTutorProfileSchema = z.object({
 
 export const updateTutorProfileSchema = z.object({
   name: z.string().min(1, "Name cannot be empty").max(100, "Name too long").optional(),
-  image: z.string().url("Invalid image URL").nullable().optional(),
-  phone: z.string().min(1, "Phone cannot be empty").max(20, "Phone too long").nullable().optional(),
-  address: z.string().min(1, "Address cannot be empty").max(500, "Address too long").nullable().optional(),
+  image: z.string().url("Invalid image URL").or(z.literal("")).nullable().optional(),
+  phone: z.string().max(20, "Phone too long").nullable().optional(),
+  address: z.string().max(500, "Address too long").nullable().optional(),
   bio: z.string().min(10, "Bio must be at least 10 characters").max(1000, "Bio too long").nullable().optional(),
   headline: z.string().min(5, "Headline must be at least 5 characters").max(200, "Headline too long").nullable().optional(),
   hourlyRate: z.number().min(1, "Hourly rate must be at least $1").max(1000, "Hourly rate too high").optional(),
   experience: z.number().min(0, "Experience cannot be negative").max(50, "Experience too high").optional(),
   education: z.string().min(5, "Education must be at least 5 characters").max(500, "Education too long").nullable().optional(),
-  isAvailable: z.boolean().optional()
+  isAvailable: z.boolean().optional(),
+  banner: z.string().url("Invalid banner URL").or(z.literal("")).nullable().optional()
 }).refine((data) => {
   const fields = Object.values(data).filter(field => field !== undefined);
   return fields.length > 0;

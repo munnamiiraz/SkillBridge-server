@@ -41,7 +41,7 @@ const getUsers = async (req: Request, res: Response, next: NextFunction) => {
 const updateUserStatus = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { userId } = req.params;
-    const result = await AdminService.updateUserStatus(userId as string, req.body);
+    const result = await AdminService.updateUserStatus(userId as string, req.body, req.user!.role);
     
     res.status(200).json({
       success: true,
@@ -68,7 +68,7 @@ const banUser = async (req: Request, res: Response, next: NextFunction) => {
     const result = await AdminService.updateUserStatus(userId as string, {
       status: "BANNED",
       banReason: banReason.trim()
-    });
+    }, req.user!.role);
     
     res.status(200).json({
       success: true,
@@ -86,7 +86,7 @@ const unbanUser = async (req: Request, res: Response, next: NextFunction) => {
     
     const result = await AdminService.updateUserStatus(userId as string, {
       status: "ACTIVE"
-    });
+    }, req.user!.role);
     
     res.status(200).json({
       success: true,
@@ -177,4 +177,29 @@ const cancelBooking = async (req: Request, res: Response, next: NextFunction) =>
 
 
 
-export const AdminController = { login, getUsers, updateUserStatus, banUser, unbanUser, getAllBookings, cancelBooking, getPlatformStats };
+const verifyTutor = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { tutorProfileId } = req.params;
+    const result = await AdminService.verifyTutor(tutorProfileId as string);
+    
+    res.status(200).json({
+      success: true,
+      message: "Tutor verified successfully",
+      data: result
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const AdminController = { 
+  login, 
+  getUsers, 
+  updateUserStatus, 
+  banUser, 
+  unbanUser, 
+  getAllBookings, 
+  cancelBooking, 
+  getPlatformStats,
+  verifyTutor
+};

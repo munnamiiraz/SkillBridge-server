@@ -197,7 +197,10 @@ export const Tutor_profileScalarFieldEnum = {
   averageRating: 'averageRating',
   totalReviews: 'totalReviews',
   totalSessions: 'totalSessions',
+  isVerified: 'isVerified',
+  verifiedAt: 'verifiedAt',
   isFeatured: 'isFeatured',
+  banner: 'banner',
   createdAt: 'createdAt',
   updatedAt: 'updatedAt'
 } as const

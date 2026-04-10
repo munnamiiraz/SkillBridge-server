@@ -10,15 +10,23 @@ import { TutorRoutes } from "./modules/tutor/tutor.route.js";
 import { PublicRoutes } from "./modules/public/public.route.js";
 import { AdminRoutes } from "./modules/admin/admin/admin.route.js";
 import { CategoryRoutes } from "./modules/admin/category/category.routes.js";
+import UploadRoutes from "./modules/upload/upload.route.js";
 import helmet from "helmet";
 import hpp from "hpp";
 import { rateLimit } from "express-rate-limit";
 import cookieParser from 'cookie-parser';
-import { connectRedis } from './lib/redis';
+// import { connectRedis } from './lib/redis';
 import {authRoutes} from "./modules/auth/auth.routes.js"
 import { sessionAuth } from "./middleware/sessionAuth.js";
 import { kafkaClient } from "./lib/kafka.js";
+import client from 'prom-client';
 
+// Collect default metrics (CPU, Memory, etc.)
+client.collectDefaultMetrics();
+
+
+import { PaymentRoutes } from "./modules/payment/payment.route.js";
+import { PaymentController } from "./modules/payment/payment.controller.js";
 
 const app: Application = express();
 app.set("trust proxy", true);
@@ -49,14 +57,22 @@ if (process.env.NODE_ENV === 'production') {
 }
 
 app.use(cookieParser());
+
+// Special route for Stripe Webhook (needs raw body)
+app.post("/api/payment/webhook", express.raw({ type: 'application/json' }), PaymentController.handleWebhook);
+
 app.use(express.json({ limit: '10kb' })); 
 app.use(hpp()); 
+
+// Payment routes (session creation etc)
+app.use("/api/payment", PaymentRoutes);
 
 // Express 5 (path-to-regexp v6) requires wildcard segments to be named.
 app.all("/api/auth", toNodeHandler(auth));
 app.all("/api/auth/*rest", toNodeHandler(auth));
 
 
+app.use("/api/upload", UploadRoutes);
 app.use("/api/public", PublicRoutes);
 app.use("/api/student", StudentRoutes);
 app.use("/api/tutor", TutorRoutes);
@@ -80,12 +96,17 @@ app.get("/", (req, res) => {
     res.status(200).json({ status: "ok", message: "Server is healthy" });
 });
 
+app.get("/metrics", async (req, res) => {
+    res.set('Content-Type', client.register.contentType);
+    res.send(await client.register.metrics());
+});
+
 
 app.use('/api/session-auth', authRoutes);
 
 
 export const initializeAppServices = async () => {
-    await connectRedis();
+    // await connectRedis();
 };
 
 

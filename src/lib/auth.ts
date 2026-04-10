@@ -34,9 +34,12 @@ export const auth = betterAuth({
   callbacks: {
     session: async ({ session, user }: any) => {
       if (user && session.user) {
+        session.user.name = user.name;
+        session.user.email = user.email;
         session.user.role = user.role;
         session.user.phone = user.phone;
         session.user.status = user.status;
+        session.user.image = user.image;
       }
       return session;
     },
@@ -79,6 +82,13 @@ export const auth = betterAuth({
     enabled: true,
     autoSignIn: true,
     requireEmailVerification: false,
+  },
+
+  socialProviders: {
+    google: {
+      clientId: process.env.GOOGLE_CLIENT_ID as string,
+      clientSecret: process.env.GOOGLE_CLIENT_SECRET as string,
+    },
   },
 
   trustedOrigins: [

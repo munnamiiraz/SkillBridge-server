@@ -1,5 +1,5 @@
 import { randomBytes } from 'crypto';
-import redisClient from '../../lib/redis';
+// import redisClient from '../../lib/redis';
 
 const SESSION_PREFIX = 'session:';
 const USER_SESSIONS_PREFIX = 'user:sessions:';
@@ -24,6 +24,7 @@ export interface SessionData {
 export const sessionService = {
   async create(userId: string, email: string, role: string, emailVerified: boolean, name: string, metadata: { userAgent: string; ip: string; deviceId?: string }, existingSessionId?: string): Promise<string> {
     const sessionId = existingSessionId || randomBytes(32).toString('hex');
+    /*
     const sessionKey = `${SESSION_PREFIX}${sessionId}`;
     
     const sessionData: SessionData = {
@@ -47,11 +48,13 @@ export const sessionService = {
     const userSessionsKey = `${USER_SESSIONS_PREFIX}${userId}`;
     await redisClient.sAdd(userSessionsKey, sessionId);
     await redisClient.expire(userSessionsKey, SESSION_TTL);
+    */
 
     return sessionId;
   },
 
   async get(sessionId: string): Promise<SessionData | null> {
+    /*
     const sessionKey = `${SESSION_PREFIX}${sessionId}`;
     const data = await redisClient.get(sessionKey);
     
@@ -68,9 +71,12 @@ export const sessionService = {
     await redisClient.setEx(sessionKey, SESSION_TTL, JSON.stringify(session));
 
     return session;
+    */
+    return null;
   },
 
   async delete(sessionId: string): Promise<void> {
+    /*
     const sessionKey = `${SESSION_PREFIX}${sessionId}`;
     const data = await redisClient.get(sessionKey);
     
@@ -80,9 +86,11 @@ export const sessionService = {
     }
     
     await redisClient.del(sessionKey);
+    */
   },
 
   async deleteAllUserSessions(userId: string): Promise<void> {
+    /*
     const userSessionsKey = `${USER_SESSIONS_PREFIX}${userId}`;
     const sessionIds = await redisClient.sMembers(userSessionsKey);
     
@@ -90,9 +98,11 @@ export const sessionService = {
     sessionIds.forEach(id => pipeline.del(`${SESSION_PREFIX}${id}`));
     pipeline.del(userSessionsKey);
     await pipeline.exec();
+    */
   },
 
   async getUserSessions(userId: string): Promise<SessionData[]> {
+    /*
     const userSessionsKey = `${USER_SESSIONS_PREFIX}${userId}`;
     const sessionIds = await redisClient.sMembers(userSessionsKey);
     
@@ -103,14 +113,18 @@ export const sessionService = {
     }
     
     return sessions;
+    */
+    return [];
   },
 
   async deleteOtherSessions(userId: string, currentSessionId: string): Promise<void> {
+    /*
     const sessions = await this.getUserSessions(userId);
     const otherSessions = sessions.filter(s => s.sessionId !== currentSessionId);
     
     for (const session of otherSessions) {
       await this.delete(session.sessionId);
     }
+    */
   },
 };

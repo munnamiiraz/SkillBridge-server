@@ -115,21 +115,29 @@ const getUsers = async (options: { page: number; limit: number; role?: string; s
   };
 };
 
-const updateUserStatus = async (userId: string, data: UpdateUserStatusInput) => {
+const updateUserStatus = async (userId: string, data: UpdateUserStatusInput, requesterRole: string) => {
   const validatedData = updateUserStatusSchema.parse(data);
   
-  const user = await prisma.user.findUnique({
+  const targetUser = await prisma.user.findUnique({
     where: { id: userId },
     select: { id: true, role: true, status: true }
   });
   
-  if (!user) {
+  if (!targetUser) {
     throw new Error("User not found");
   }
   
-  if (user.role === "ADMIN") {
-    throw new Error("Cannot modify admin user status");
+  // 1. Hierarchy Check
+  if (targetUser.role === "SUPER_ADMIN") {
+    throw new Error("Cannot modify status of a Super Admin");
   }
+
+  if (targetUser.role === "ADMIN" && requesterRole !== "SUPER_ADMIN") {
+    throw new Error("Only a Super Admin can ban/modify another Admin");
+  }
+
+  // Prevent self-banning (optional but standard)
+  // if (userId === requesterId) { throw new Error("Self-banning is not allowed"); }
   
   const updateData: any = {
     status: validatedData.status
@@ -353,4 +361,55 @@ const cancelBooking = async (bookingId: string, data: { reason?: string; refundA
 
 
 
-export const AdminService = { login, getUsers, updateUserStatus, getAllBookings, cancelBooking, getPlatformStats };
+const verifyTutor = async (tutorProfileId: string) => {
+  const tutorProfile = await prisma.tutor_profile.findUnique({
+    where: { id: tutorProfileId },
+    include: {
+      user: true
+    }
+  });
+
+  if (!tutorProfile) {
+    throw new Error("Tutor profile not found");
+  }
+
+  // Check if already verified
+  if (tutorProfile.isVerified && tutorProfile.user.role === 'VERIFIED_TUTOR') {
+    return {
+      success: true,
+      message: "Tutor is already verified",
+      data: tutorProfile
+    };
+  }
+
+  return await prisma.$transaction(async (tx: any) => {
+    // 1. Update Tutor Profile
+    const updatedProfile = await tx.tutor_profile.update({
+      where: { id: tutorProfileId },
+      data: {
+        isVerified: true,
+        verifiedAt: new Date()
+      }
+    });
+
+    // 2. Update User Role
+    await tx.user.update({
+      where: { id: tutorProfile.userId },
+      data: {
+        role: 'VERIFIED_TUTOR'
+      }
+    });
+
+    return updatedProfile;
+  });
+};
+
+export const AdminService = { 
+  login, 
+  getUsers, 
+  updateUserStatus, 
+  getAllBookings, 
+  cancelBooking, 
+  getPlatformStats,
+  verifyTutor
+};

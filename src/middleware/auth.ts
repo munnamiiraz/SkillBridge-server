@@ -4,7 +4,9 @@ import { auth as betterAuth } from "../lib/auth";
 export enum UserRole {
   STUDENT = "STUDENT",
   TUTOR = "TUTOR",
-  ADMIN = "ADMIN"
+  VERIFIED_TUTOR = "VERIFIED_TUTOR",
+  ADMIN = "ADMIN",
+  SUPER_ADMIN = "SUPER_ADMIN"
 }
 
 declare global {
@@ -30,6 +32,8 @@ const auth = (...roles: UserRole[]) => {
       // or it might be passed as a Bearer token.
       const rawToken = req.headers.authorization?.split(" ")[1] || req.cookies?.["better-auth.session_token"] || req.cookies?.sessionId;
 
+      let session;
+      /*
       let sessionData = null;
 
       // 2. ONLY IF we have a token, check Redis FIRST (Super Fast! 🚀)
@@ -44,19 +48,19 @@ const auth = (...roles: UserRole[]) => {
         }
       }
 
-      let session;
-
       // 3. CACHE MISS: If not in Redis, check Database (Slow Fallback 🐢)
       if (sessionData) {
         // We got it from Redis! Reconstruct the session object expected by your code
         session = { user: sessionData };
       } else {
+      */
         // Query Database
         session = await betterAuth.api.getSession({
           headers: req.headers as any,
         });
 
         // 4. RE-HYDRATE CACHE: Found in DB? Save it back to Redis!
+        /*
         if (session && rawToken) {
            try {
               const { sessionService } = await import("../modules/auth/session.service.js");
@@ -76,7 +80,8 @@ const auth = (...roles: UserRole[]) => {
              console.error("Failed to hydrate Redis:", e);
            }
         }
-      }
+        */
+      // }
 
       if (!session) {
         return res.status(401).json({

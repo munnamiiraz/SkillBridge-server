@@ -210,6 +210,34 @@ const updateBookingStatus = async (req: Request, res: Response, next: NextFuncti
   }
 };
 
+const requestVerification = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const result = await TutorService.requestVerification(req.user!.id);
+    
+    res.status(200).json({
+      success: true,
+      message: result.message,
+      data: result
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+const getEarningsStats = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const result = await TutorService.getEarningsStats(req.user!.id);
+    
+    res.status(200).json({
+      success: true,
+      message: "Earnings statistics retrieved successfully",
+      data: result
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
 export const TutorController = { 
   createProfile, 
   updateProfile, 
@@ -219,5 +247,7 @@ export const TutorController = {
   getTeachingSessions, 
   getReviews, 
   getRatingStats, 
-  updateBookingStatus 
+  updateBookingStatus,
+  requestVerification,
+  getEarningsStats
 };

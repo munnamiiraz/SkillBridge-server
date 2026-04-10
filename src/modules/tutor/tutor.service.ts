@@ -218,6 +218,7 @@ const updateProfile = async (userId: string, data: UpdateTutorProfileInput) => {
     if (validatedData.education !== undefined) profileUpdateData.education = validatedData.education;
     if (validatedData.isAvailable !== undefined) profileUpdateData.isAvailable = validatedData.isAvailable;
     if (validatedData.address !== undefined) profileUpdateData.address = validatedData.address;
+    if (validatedData.banner !== undefined) profileUpdateData.banner = validatedData.banner;
     
     // 2. Update User if needed
     if (Object.keys(userUpdateData).length > 0) {
@@ -714,6 +715,99 @@ export const updateAvailabilitySlots = async (
 
 
 
+const requestVerification = async (userId: string) => {
+  const tutorProfile = await prisma.tutor_profile.findUnique({
+    where: { userId },
+    include: {
+      user: true
+    }
+  });
+
+  if (!tutorProfile) {
+    throw new Error("Tutor profile not found");
+  }
+
+  if (tutorProfile.isVerified || tutorProfile.user.role === 'VERIFIED_TUTOR') {
+    throw new Error("Tutor is already verified");
+  }
+
+  if (tutorProfile.totalSessions < 10) {
+    throw new Error(`Verification requires at least 10 completed sessions. You have ${tutorProfile.totalSessions}.`);
+  }
+
+  // Auto-upgrade for now or mark for admin review
+  return await prisma.$transaction(async (tx: any) => {
+    // 1. Update Profile
+    await tx.tutor_profile.update({
+      where: { id: tutorProfile.id },
+      data: {
+        isVerified: true,
+        verifiedAt: new Date(),
+      }
+    });
+
+    // 2. Update User Role
+    await tx.user.update({
+      where: { id: userId },
+      data: {
+        role: 'VERIFIED_TUTOR'
+      }
+    });
+
+    return {
+      success: true,
+      message: "Congratulations! You are now a Verified Tutor."
+    };
+  });
+};
+
+const getEarningsStats = async (userId: string) => {
+  const tutorProfile = await prisma.tutor_profile.findUnique({
+    where: { userId }
+  });
+
+  if (!tutorProfile) throw new Error("Tutor profile not found");
+
+  const sixMonthsAgo = new Date();
+  sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
+
+  const bookings = await prisma.booking.findMany({
+    where: {
+      tutorProfileId: tutorProfile.id,
+      status: 'COMPLETED',
+      scheduledAt: { gte: sixMonthsAgo }
+    },
+    select: {
+      price: true,
+      scheduledAt: true
+    },
+    orderBy: { scheduledAt: 'asc' }
+  });
+
+  const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+  const statsMap: Record<string, number> = {};
+
+  // Initialize last 6 months
+  for (let i = 5; i >= 0; i--) {
+    const d = new Date();
+    d.setMonth(d.getMonth() - i);
+    const monthKey = `${monthNames[d.getMonth()]}`;
+    statsMap[monthKey] = 0;
+  }
+
+  bookings.forEach(b => {
+    const monthKey = monthNames[new Date(b.scheduledAt).getMonth()];
+    if (statsMap[monthKey] !== undefined) {
+      statsMap[monthKey] += b.price;
+    }
+  });
+
+  return Object.entries(statsMap).map(([month, amount]) => ({
+    month,
+    earnings: amount
+  }));
+};
+
 export const TutorService = { 
   createProfile, 
   updateProfile, 
@@ -723,5 +817,7 @@ export const TutorService = {
   getTeachingSessions,
   getReviews, 
   getRatingStats, 
-  updateBookingStatus 
+  updateBookingStatus,
+  requestVerification,
+  getEarningsStats
 };

@@ -55,7 +55,10 @@ export type Tutor_profileMinAggregateOutputType = {
   averageRating: number | null
   totalReviews: number | null
   totalSessions: number | null
+  isVerified: boolean | null
+  verifiedAt: Date | null
   isFeatured: boolean | null
+  banner: string | null
   createdAt: Date | null
   updatedAt: Date | null
 }
@@ -73,7 +76,10 @@ export type Tutor_profileMaxAggregateOutputType = {
   averageRating: number | null
   totalReviews: number | null
   totalSessions: number | null
+  isVerified: boolean | null
+  verifiedAt: Date | null
   isFeatured: boolean | null
+  banner: string | null
   createdAt: Date | null
   updatedAt: Date | null
 }
@@ -91,7 +97,10 @@ export type Tutor_profileCountAggregateOutputType = {
   averageRating: number
   totalReviews: number
   totalSessions: number
+  isVerified: number
+  verifiedAt: number
   isFeatured: number
+  banner: number
   createdAt: number
   updatedAt: number
   _all: number
@@ -127,7 +136,10 @@ export type Tutor_profileMinAggregateInputType = {
   averageRating?: true
   totalReviews?: true
   totalSessions?: true
+  isVerified?: true
+  verifiedAt?: true
   isFeatured?: true
+  banner?: true
   createdAt?: true
   updatedAt?: true
 }
@@ -145,7 +157,10 @@ export type Tutor_profileMaxAggregateInputType = {
   averageRating?: true
   totalReviews?: true
   totalSessions?: true
+  isVerified?: true
+  verifiedAt?: true
   isFeatured?: true
+  banner?: true
   createdAt?: true
   updatedAt?: true
 }
@@ -163,7 +178,10 @@ export type Tutor_profileCountAggregateInputType = {
   averageRating?: true
   totalReviews?: true
   totalSessions?: true
+  isVerified?: true
+  verifiedAt?: true
   isFeatured?: true
+  banner?: true
   createdAt?: true
   updatedAt?: true
   _all?: true
@@ -268,7 +286,10 @@ export type Tutor_profileGroupByOutputType = {
   averageRating: number
   totalReviews: number
   totalSessions: number
+  isVerified: boolean
+  verifiedAt: Date | null
   isFeatured: boolean
+  banner: string | null
   createdAt: Date
   updatedAt: Date
   _count: Tutor_profileCountAggregateOutputType | null
@@ -309,7 +330,10 @@ export type tutor_profileWhereInput = {
   averageRating?: Prisma.FloatFilter<"tutor_profile"> | number
   totalReviews?: Prisma.IntFilter<"tutor_profile"> | number
   totalSessions?: Prisma.IntFilter<"tutor_profile"> | number
+  isVerified?: Prisma.BoolFilter<"tutor_profile"> | boolean
+  verifiedAt?: Prisma.DateTimeNullableFilter<"tutor_profile"> | Date | string | null
   isFeatured?: Prisma.BoolFilter<"tutor_profile"> | boolean
+  banner?: Prisma.StringNullableFilter<"tutor_profile"> | string | null
   createdAt?: Prisma.DateTimeFilter<"tutor_profile"> | Date | string
   updatedAt?: Prisma.DateTimeFilter<"tutor_profile"> | Date | string
   availability_slot?: Prisma.Availability_slotListRelationFilter
@@ -331,7 +355,10 @@ export type tutor_profileOrderByWithRelationInput = {
   averageRating?: Prisma.SortOrder
   totalReviews?: Prisma.SortOrder
   totalSessions?: Prisma.SortOrder
+  isVerified?: Prisma.SortOrder
+  verifiedAt?: Prisma.SortOrderInput | Prisma.SortOrder
   isFeatured?: Prisma.SortOrder
+  banner?: Prisma.SortOrderInput | Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
   availability_slot?: Prisma.availability_slotOrderByRelationAggregateInput
@@ -356,7 +383,10 @@ export type tutor_profileWhereUniqueInput = Prisma.AtLeast<{
   averageRating?: Prisma.FloatFilter<"tutor_profile"> | number
   totalReviews?: Prisma.IntFilter<"tutor_profile"> | number
   totalSessions?: Prisma.IntFilter<"tutor_profile"> | number
+  isVerified?: Prisma.BoolFilter<"tutor_profile"> | boolean
+  verifiedAt?: Prisma.DateTimeNullableFilter<"tutor_profile"> | Date | string | null
   isFeatured?: Prisma.BoolFilter<"tutor_profile"> | boolean
+  banner?: Prisma.StringNullableFilter<"tutor_profile"> | string | null
   createdAt?: Prisma.DateTimeFilter<"tutor_profile"> | Date | string
   updatedAt?: Prisma.DateTimeFilter<"tutor_profile"> | Date | string
   availability_slot?: Prisma.Availability_slotListRelationFilter
@@ -378,7 +408,10 @@ export type tutor_profileOrderByWithAggregationInput = {
   averageRating?: Prisma.SortOrder
   totalReviews?: Prisma.SortOrder
   totalSessions?: Prisma.SortOrder
+  isVerified?: Prisma.SortOrder
+  verifiedAt?: Prisma.SortOrderInput | Prisma.SortOrder
   isFeatured?: Prisma.SortOrder
+  banner?: Prisma.SortOrderInput | Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
   _count?: Prisma.tutor_profileCountOrderByAggregateInput
@@ -404,7 +437,10 @@ export type tutor_profileScalarWhereWithAggregatesInput = {
   averageRating?: Prisma.FloatWithAggregatesFilter<"tutor_profile"> | number
   totalReviews?: Prisma.IntWithAggregatesFilter<"tutor_profile"> | number
   totalSessions?: Prisma.IntWithAggregatesFilter<"tutor_profile"> | number
+  isVerified?: Prisma.BoolWithAggregatesFilter<"tutor_profile"> | boolean
+  verifiedAt?: Prisma.DateTimeNullableWithAggregatesFilter<"tutor_profile"> | Date | string | null
   isFeatured?: Prisma.BoolWithAggregatesFilter<"tutor_profile"> | boolean
+  banner?: Prisma.StringNullableWithAggregatesFilter<"tutor_profile"> | string | null
   createdAt?: Prisma.DateTimeWithAggregatesFilter<"tutor_profile"> | Date | string
   updatedAt?: Prisma.DateTimeWithAggregatesFilter<"tutor_profile"> | Date | string
 }
@@ -421,7 +457,10 @@ export type tutor_profileCreateInput = {
   averageRating?: number
   totalReviews?: number
   totalSessions?: number
+  isVerified?: boolean
+  verifiedAt?: Date | string | null
   isFeatured?: boolean
+  banner?: string | null
   createdAt?: Date | string
   updatedAt?: Date | string
   availability_slot?: Prisma.availability_slotCreateNestedManyWithoutTutor_profileInput
@@ -443,7 +482,10 @@ export type tutor_profileUncheckedCreateInput = {
   averageRating?: number
   totalReviews?: number
   totalSessions?: number
+  isVerified?: boolean
+  verifiedAt?: Date | string | null
   isFeatured?: boolean
+  banner?: string | null
   createdAt?: Date | string
   updatedAt?: Date | string
   availability_slot?: Prisma.availability_slotUncheckedCreateNestedManyWithoutTutor_profileInput
@@ -463,7 +505,10 @@ export type tutor_profileUpdateInput = {
   averageRating?: Prisma.FloatFieldUpdateOperationsInput | number
   totalReviews?: Prisma.IntFieldUpdateOperationsInput | number
   totalSessions?: Prisma.IntFieldUpdateOperationsInput | number
+  isVerified?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  verifiedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   isFeatured?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  banner?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   availability_slot?: Prisma.availability_slotUpdateManyWithoutTutor_profileNestedInput
@@ -485,7 +530,10 @@ export type tutor_profileUncheckedUpdateInput = {
   averageRating?: Prisma.FloatFieldUpdateOperationsInput | number
   totalReviews?: Prisma.IntFieldUpdateOperationsInput | number
   totalSessions?: Prisma.IntFieldUpdateOperationsInput | number
+  isVerified?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  verifiedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   isFeatured?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  banner?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   availability_slot?: Prisma.availability_slotUncheckedUpdateManyWithoutTutor_profileNestedInput
@@ -506,7 +554,10 @@ export type tutor_profileCreateManyInput = {
   averageRating?: number
   totalReviews?: number
   totalSessions?: number
+  isVerified?: boolean
+  verifiedAt?: Date | string | null
   isFeatured?: boolean
+  banner?: string | null
   createdAt?: Date | string
   updatedAt?: Date | string
 }
@@ -523,7 +574,10 @@ export type tutor_profileUpdateManyMutationInput = {
   averageRating?: Prisma.FloatFieldUpdateOperationsInput | number
   totalReviews?: Prisma.IntFieldUpdateOperationsInput | number
   totalSessions?: Prisma.IntFieldUpdateOperationsInput | number
+  isVerified?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  verifiedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   isFeatured?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  banner?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
 }
@@ -541,7 +595,10 @@ export type tutor_profileUncheckedUpdateManyInput = {
   averageRating?: Prisma.FloatFieldUpdateOperationsInput | number
   totalReviews?: Prisma.IntFieldUpdateOperationsInput | number
   totalSessions?: Prisma.IntFieldUpdateOperationsInput | number
+  isVerified?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  verifiedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   isFeatured?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  banner?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
 }
@@ -564,7 +621,10 @@ export type tutor_profileCountOrderByAggregateInput = {
   averageRating?: Prisma.SortOrder
   totalReviews?: Prisma.SortOrder
   totalSessions?: Prisma.SortOrder
+  isVerified?: Prisma.SortOrder
+  verifiedAt?: Prisma.SortOrder
   isFeatured?: Prisma.SortOrder
+  banner?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
 }
@@ -590,7 +650,10 @@ export type tutor_profileMaxOrderByAggregateInput = {
   averageRating?: Prisma.SortOrder
   totalReviews?: Prisma.SortOrder
   totalSessions?: Prisma.SortOrder
+  isVerified?: Prisma.SortOrder
+  verifiedAt?: Prisma.SortOrder
   isFeatured?: Prisma.SortOrder
+  banner?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
 }
@@ -608,7 +671,10 @@ export type tutor_profileMinOrderByAggregateInput = {
   averageRating?: Prisma.SortOrder
   totalReviews?: Prisma.SortOrder
   totalSessions?: Prisma.SortOrder
+  isVerified?: Prisma.SortOrder
+  verifiedAt?: Prisma.SortOrder
   isFeatured?: Prisma.SortOrder
+  banner?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
 }
@@ -712,7 +778,10 @@ export type tutor_profileCreateWithoutAvailability_slotInput = {
   averageRating?: number
   totalReviews?: number
   totalSessions?: number
+  isVerified?: boolean
+  verifiedAt?: Date | string | null
   isFeatured?: boolean
+  banner?: string | null
   createdAt?: Date | string
   updatedAt?: Date | string
   booking?: Prisma.bookingCreateNestedManyWithoutTutor_profileInput
@@ -733,7 +802,10 @@ export type tutor_profileUncheckedCreateWithoutAvailability_slotInput = {
   averageRating?: number
   totalReviews?: number
   totalSessions?: number
+  isVerified?: boolean
+  verifiedAt?: Date | string | null
   isFeatured?: boolean
+  banner?: string | null
   createdAt?: Date | string
   updatedAt?: Date | string
   booking?: Prisma.bookingUncheckedCreateNestedManyWithoutTutor_profileInput
@@ -768,7 +840,10 @@ export type tutor_profileUpdateWithoutAvailability_slotInput = {
   averageRating?: Prisma.FloatFieldUpdateOperationsInput | number
   totalReviews?: Prisma.IntFieldUpdateOperationsInput | number
   totalSessions?: Prisma.IntFieldUpdateOperationsInput | number
+  isVerified?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  verifiedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   isFeatured?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  banner?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   booking?: Prisma.bookingUpdateManyWithoutTutor_profileNestedInput
@@ -789,7 +864,10 @@ export type tutor_profileUncheckedUpdateWithoutAvailability_slotInput = {
   averageRating?: Prisma.FloatFieldUpdateOperationsInput | number
   totalReviews?: Prisma.IntFieldUpdateOperationsInput | number
   totalSessions?: Prisma.IntFieldUpdateOperationsInput | number
+  isVerified?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  verifiedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   isFeatured?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  banner?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   booking?: Prisma.bookingUncheckedUpdateManyWithoutTutor_profileNestedInput
@@ -808,7 +886,10 @@ export type tutor_profileCreateWithoutBookingInput = {
   averageRating?: number
   totalReviews?: number
   totalSessions?: number
+  isVerified?: boolean
+  verifiedAt?: Date | string | null
   isFeatured?: boolean
+  banner?: string | null
   createdAt?: Date | string
   updatedAt?: Date | string
   availability_slot?: Prisma.availability_slotCreateNestedManyWithoutTutor_profileInput
@@ -829,7 +910,10 @@ export type tutor_profileUncheckedCreateWithoutBookingInput = {
   averageRating?: number
   totalReviews?: number
   totalSessions?: number
+  isVerified?: boolean
+  verifiedAt?: Date | string | null
   isFeatured?: boolean
+  banner?: string | null
   createdAt?: Date | string
   updatedAt?: Date | string
   availability_slot?: Prisma.availability_slotUncheckedCreateNestedManyWithoutTutor_profileInput
@@ -864,7 +948,10 @@ export type tutor_profileUpdateWithoutBookingInput = {
   averageRating?: Prisma.FloatFieldUpdateOperationsInput | number
   totalReviews?: Prisma.IntFieldUpdateOperationsInput | number
   totalSessions?: Prisma.IntFieldUpdateOperationsInput | number
+  isVerified?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  verifiedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   isFeatured?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  banner?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   availability_slot?: Prisma.availability_slotUpdateManyWithoutTutor_profileNestedInput
@@ -885,7 +972,10 @@ export type tutor_profileUncheckedUpdateWithoutBookingInput = {
   averageRating?: Prisma.FloatFieldUpdateOperationsInput | number
   totalReviews?: Prisma.IntFieldUpdateOperationsInput | number
   totalSessions?: Prisma.IntFieldUpdateOperationsInput | number
+  isVerified?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  verifiedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   isFeatured?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  banner?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   availability_slot?: Prisma.availability_slotUncheckedUpdateManyWithoutTutor_profileNestedInput
@@ -904,7 +994,10 @@ export type tutor_profileCreateWithoutTutor_subjectInput = {
   averageRating?: number
   totalReviews?: number
   totalSessions?: number
+  isVerified?: boolean
+  verifiedAt?: Date | string | null
   isFeatured?: boolean
+  banner?: string | null
   createdAt?: Date | string
   updatedAt?: Date | string
   availability_slot?: Prisma.availability_slotCreateNestedManyWithoutTutor_profileInput
@@ -925,7 +1018,10 @@ export type tutor_profileUncheckedCreateWithoutTutor_subjectInput = {
   averageRating?: number
   totalReviews?: number
   totalSessions?: number
+  isVerified?: boolean
+  verifiedAt?: Date | string | null
   isFeatured?: boolean
+  banner?: string | null
   createdAt?: Date | string
   updatedAt?: Date | string
   availability_slot?: Prisma.availability_slotUncheckedCreateNestedManyWithoutTutor_profileInput
@@ -960,7 +1056,10 @@ export type tutor_profileUpdateWithoutTutor_subjectInput = {
   averageRating?: Prisma.FloatFieldUpdateOperationsInput | number
   totalReviews?: Prisma.IntFieldUpdateOperationsInput | number
   totalSessions?: Prisma.IntFieldUpdateOperationsInput | number
+  isVerified?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  verifiedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   isFeatured?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  banner?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   availability_slot?: Prisma.availability_slotUpdateManyWithoutTutor_profileNestedInput
@@ -981,7 +1080,10 @@ export type tutor_profileUncheckedUpdateWithoutTutor_subjectInput = {
   averageRating?: Prisma.FloatFieldUpdateOperationsInput | number
   totalReviews?: Prisma.IntFieldUpdateOperationsInput | number
   totalSessions?: Prisma.IntFieldUpdateOperationsInput | number
+  isVerified?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  verifiedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   isFeatured?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  banner?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   availability_slot?: Prisma.availability_slotUncheckedUpdateManyWithoutTutor_profileNestedInput
@@ -1000,7 +1102,10 @@ export type tutor_profileCreateWithoutUserInput = {
   averageRating?: number
   totalReviews?: number
   totalSessions?: number
+  isVerified?: boolean
+  verifiedAt?: Date | string | null
   isFeatured?: boolean
+  banner?: string | null
   createdAt?: Date | string
   updatedAt?: Date | string
   availability_slot?: Prisma.availability_slotCreateNestedManyWithoutTutor_profileInput
@@ -1020,7 +1125,10 @@ export type tutor_profileUncheckedCreateWithoutUserInput = {
   averageRating?: number
   totalReviews?: number
   totalSessions?: number
+  isVerified?: boolean
+  verifiedAt?: Date | string | null
   isFeatured?: boolean
+  banner?: string | null
   createdAt?: Date | string
   updatedAt?: Date | string
   availability_slot?: Prisma.availability_slotUncheckedCreateNestedManyWithoutTutor_profileInput
@@ -1056,7 +1164,10 @@ export type tutor_profileUpdateWithoutUserInput = {
   averageRating?: Prisma.FloatFieldUpdateOperationsInput | number
   totalReviews?: Prisma.IntFieldUpdateOperationsInput | number
   totalSessions?: Prisma.IntFieldUpdateOperationsInput | number
+  isVerified?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  verifiedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   isFeatured?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  banner?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   availability_slot?: Prisma.availability_slotUpdateManyWithoutTutor_profileNestedInput
@@ -1076,7 +1187,10 @@ export type tutor_profileUncheckedUpdateWithoutUserInput = {
   averageRating?: Prisma.FloatFieldUpdateOperationsInput | number
   totalReviews?: Prisma.IntFieldUpdateOperationsInput | number
   totalSessions?: Prisma.IntFieldUpdateOperationsInput | number
+  isVerified?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  verifiedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   isFeatured?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  banner?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   availability_slot?: Prisma.availability_slotUncheckedUpdateManyWithoutTutor_profileNestedInput
@@ -1146,7 +1260,10 @@ export type tutor_profileSelect<ExtArgs extends runtime.Types.Extensions.Interna
   averageRating?: boolean
   totalReviews?: boolean
   totalSessions?: boolean
+  isVerified?: boolean
+  verifiedAt?: boolean
   isFeatured?: boolean
+  banner?: boolean
   createdAt?: boolean
   updatedAt?: boolean
   availability_slot?: boolean | Prisma.tutor_profile$availability_slotArgs<ExtArgs>
@@ -1169,7 +1286,10 @@ export type tutor_profileSelectCreateManyAndReturn<ExtArgs extends runtime.Types
   averageRating?: boolean
   totalReviews?: boolean
   totalSessions?: boolean
+  isVerified?: boolean
+  verifiedAt?: boolean
   isFeatured?: boolean
+  banner?: boolean
   createdAt?: boolean
   updatedAt?: boolean
   user?: boolean | Prisma.userDefaultArgs<ExtArgs>
@@ -1188,7 +1308,10 @@ export type tutor_profileSelectUpdateManyAndReturn<ExtArgs extends runtime.Types
   averageRating?: boolean
   totalReviews?: boolean
   totalSessions?: boolean
+  isVerified?: boolean
+  verifiedAt?: boolean
   isFeatured?: boolean
+  banner?: boolean
   createdAt?: boolean
   updatedAt?: boolean
   user?: boolean | Prisma.userDefaultArgs<ExtArgs>
@@ -1207,12 +1330,15 @@ export type tutor_profileSelectScalar = {
   averageRating?: boolean
   totalReviews?: boolean
   totalSessions?: boolean
+  isVerified?: boolean
+  verifiedAt?: boolean
   isFeatured?: boolean
+  banner?: boolean
   createdAt?: boolean
   updatedAt?: boolean
 }
 
-export type tutor_profileOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "userId" | "bio" | "headline" | "hourlyRate" | "address" | "experience" | "education" | "isAvailable" | "averageRating" | "totalReviews" | "totalSessions" | "isFeatured" | "createdAt" | "updatedAt", ExtArgs["result"]["tutor_profile"]>
+export type tutor_profileOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "userId" | "bio" | "headline" | "hourlyRate" | "address" | "experience" | "education" | "isAvailable" | "averageRating" | "totalReviews" | "totalSessions" | "isVerified" | "verifiedAt" | "isFeatured" | "banner" | "createdAt" | "updatedAt", ExtArgs["result"]["tutor_profile"]>
 export type tutor_profileInclude<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
   availability_slot?: boolean | Prisma.tutor_profile$availability_slotArgs<ExtArgs>
   booking?: boolean | Prisma.tutor_profile$bookingArgs<ExtArgs>
@@ -1248,7 +1374,10 @@ export type $tutor_profilePayload<ExtArgs extends runtime.Types.Extensions.Inter
     averageRating: number
     totalReviews: number
     totalSessions: number
+    isVerified: boolean
+    verifiedAt: Date | null
     isFeatured: boolean
+    banner: string | null
     createdAt: Date
     updatedAt: Date
   }, ExtArgs["result"]["tutor_profile"]>
@@ -1690,7 +1819,10 @@ export interface tutor_profileFieldRefs {
   readonly averageRating: Prisma.FieldRef<"tutor_profile", 'Float'>
   readonly totalReviews: Prisma.FieldRef<"tutor_profile", 'Int'>
   readonly totalSessions: Prisma.FieldRef<"tutor_profile", 'Int'>
+  readonly isVerified: Prisma.FieldRef<"tutor_profile", 'Boolean'>
+  readonly verifiedAt: Prisma.FieldRef<"tutor_profile", 'DateTime'>
   readonly isFeatured: Prisma.FieldRef<"tutor_profile", 'Boolean'>
+  readonly banner: Prisma.FieldRef<"tutor_profile", 'String'>
   readonly createdAt: Prisma.FieldRef<"tutor_profile", 'DateTime'>
   readonly updatedAt: Prisma.FieldRef<"tutor_profile", 'DateTime'>
 }

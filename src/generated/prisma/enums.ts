@@ -23,7 +23,9 @@ export type BookingStatus = (typeof BookingStatus)[keyof typeof BookingStatus]
 export const Role = {
   STUDENT: 'STUDENT',
   TUTOR: 'TUTOR',
-  ADMIN: 'ADMIN'
+  VERIFIED_TUTOR: 'VERIFIED_TUTOR',
+  ADMIN: 'ADMIN',
+  SUPER_ADMIN: 'SUPER_ADMIN'
 } as const
 
 export type Role = (typeof Role)[keyof typeof Role]
