@@ -105,7 +105,7 @@ const auth = (...roles: UserRole[]) => {
         emailVerified: session.user.emailVerified,
       };
 
-      if (roles.length && !roles.includes(req.user.role as UserRole)) {
+      if (roles.length && !roles.includes(req.user.role as UserRole) && req.user.role !== UserRole.SUPER_ADMIN) {
         return res.status(403).json({
           success: false,
           message:

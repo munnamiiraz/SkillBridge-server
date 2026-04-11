@@ -20,4 +20,9 @@ router.patch("/verify-tutor/:tutorProfileId", auth(UserRole.SUPER_ADMIN), AdminC
 router.get("/profile", auth(UserRole.ADMIN, UserRole.SUPER_ADMIN), AdminController.getProfile);
 router.patch("/profile", auth(UserRole.ADMIN, UserRole.SUPER_ADMIN), AdminController.updateProfile);
 
+// Knowledge Base Management (Super Admin Only)
+router.get("/kb", auth(UserRole.SUPER_ADMIN), AdminController.getAllKnowledge);
+router.post("/kb", auth(UserRole.SUPER_ADMIN), AdminController.addKnowledge);
+router.delete("/kb/:id", auth(UserRole.SUPER_ADMIN), AdminController.deleteKnowledge);
+
 export const AdminRoutes = router;

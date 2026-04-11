@@ -528,4 +528,46 @@ const getReviews = async (studentId: string, options: PaginationOptions): Promis
   };
 };
 
-export const StudentService = { updateProfile, getProfile, createReview, createBooking, getBookings, getReviewableBookings, cancelBooking, getReviews };
+const getStats = async (studentId: string) => {
+  const [
+    totalBookings,
+    completedSessions,
+    upcomingSessions,
+    totalSpentData,
+    reviews
+  ] = await Promise.all([
+    prisma.booking.count({ where: { studentId } }),
+    prisma.booking.count({ where: { studentId, status: "COMPLETED" } }),
+    prisma.booking.count({ 
+      where: { 
+        studentId, 
+        status: { in: ["PENDING", "CONFIRMED", "ONGOING"] } 
+      } 
+    }),
+    prisma.booking.aggregate({
+      where: { 
+        studentId, 
+        status: { not: "CANCELLED" } 
+      },
+      _sum: { price: true }
+    }),
+    prisma.review.findMany({
+      where: { studentId },
+      select: { rating: true }
+    })
+  ]);
+
+  const averageRating = reviews.length > 0
+    ? (reviews.reduce((sum, r) => sum + r.rating, 0) / reviews.length).toFixed(1)
+    : "0.0";
+
+  return {
+    totalBookings,
+    completedSessions,
+    upcomingSessions,
+    totalSpent: totalSpentData._sum.price || 0,
+    averageRating
+  };
+};
+
+export const StudentService = { updateProfile, getProfile, createReview, createBooking, getBookings, getReviewableBookings, cancelBooking, getReviews, getStats };

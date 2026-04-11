@@ -1,4 +1,6 @@
-import { PrismaClient, Prisma } from "../src/generated/prisma/client";
+import pkg from "../src/generated/prisma/index.js";
+const { PrismaClient } = pkg;
+import { Prisma } from "../src/generated/prisma/index.js";
 import "dotenv/config";
 import { hash } from "bcryptjs";
 import { PrismaPg } from "@prisma/adapter-pg";
@@ -117,31 +119,26 @@ async function main() {
       id: "cat-1",
       name: "Mathematics",
       description: "All math-related subjects including algebra, calculus, geometry, and statistics",
-      image: "https://images.unsplash.com/photo-1635070041078-e363dbe005cb",
     },
     {
       id: "cat-2",
       name: "Science",
       description: "Physics, Chemistry, Biology, and Environmental Science",
-      image: "https://images.unsplash.com/photo-1532094349884-543bc11b234d",
     },
     {
       id: "cat-3",
       name: "Languages",
       description: "Language learning including English, Bengali, Arabic, and more",
-      image: "https://images.unsplash.com/photo-1546410531-bb4caa6b424d",
     },
     {
       id: "cat-4",
       name: "Computer Science",
       description: "Programming, Web Development, Data Science, and IT",
-      image: "https://images.unsplash.com/photo-1517694712202-14dd9538aa97",
     },
     {
       id: "cat-5",
       name: "Business",
       description: "Accounting, Economics, Management, and Marketing",
-      image: "https://images.unsplash.com/photo-1454165804606-c3d57bc86b40",
     },
   ];
 
@@ -188,11 +185,12 @@ async function main() {
 
   // Create Admin User
   console.log("👤 Creating admin user...");
+  const adminId = "00000000-0000-4000-a000-000000000001";
   const admin = await prisma.user.create({
     data: {
-      id: "user-admin",
+      id: adminId,
       name: "System Admin",
-      email: "admin@tutorconnect.com",
+      email: "admin@gmail.com",
       phone: generatePhone(),
       role: "ADMIN",
       emailVerified: true,
@@ -202,7 +200,7 @@ async function main() {
 
   await prisma.account.create({
     data: {
-      id: "acc-admin",
+      id: crypto.randomUUID(),
       accountId: "admin-account",
       providerId: "credential",
       userId: admin.id,
@@ -211,13 +209,250 @@ async function main() {
     },
   });
 
-  // Create 5000 Students
-  console.log("👨‍🎓 Creating 5000 students (this may take a while)...");
-  const studentIds: string[] = [];
-  const batchSize = 100;
+  // Create Super Admin User
+  console.log("👑 Creating super admin user...");
+  const superAdminId = "00000000-0000-4000-a000-000000000002";
+  const superAdmin = await prisma.user.create({
+    data: {
+      id: superAdminId,
+      name: "Super Administrator",
+      email: "superadmin@gmail.com",
+      phone: generatePhone(),
+      role: "SUPER_ADMIN",
+      emailVerified: true,
+      updatedAt: new Date(),
+    },
+  });
 
-  for (let i = 0; i < 5000; i++) {
-    const studentId = `user-student-${i + 1}`;
+  await prisma.account.create({
+    data: {
+      id: crypto.randomUUID(),
+      accountId: "super-admin-account",
+      providerId: "credential",
+      userId: superAdmin.id,
+      password: hashedPassword,
+      updatedAt: new Date(),
+    },
+  });
+
+  // Create Demo Student
+  console.log("👨‍🎓 Creating demo student...");
+  const demoStudentId = "00000000-0000-4000-a000-000000000003";
+  const demoStudent = await prisma.user.create({
+    data: {
+      id: demoStudentId,
+      name: "Demo Student",
+      email: "student@gmail.com",
+      phone: generatePhone(),
+      role: "STUDENT",
+      emailVerified: true,
+      address: generateAddress(),
+      updatedAt: new Date(),
+    },
+  });
+
+  await prisma.account.create({
+    data: {
+      id: crypto.randomUUID(),
+      accountId: "demo-student-account",
+      providerId: "credential",
+      userId: demoStudent.id,
+      password: hashedPassword,
+      updatedAt: new Date(),
+    },
+  });
+
+  // Create Demo Tutor
+  console.log("👨‍🏫 Creating demo tutor...");
+  const demoTutorId = "00000000-0000-4000-a000-000000000004";
+  const demoTutor = await prisma.user.create({
+    data: {
+      id: demoTutorId,
+      name: "Demo Tutor",
+      email: "tutor@gmail.com",
+      phone: generatePhone(),
+      role: "TUTOR",
+      emailVerified: true,
+      address: generateAddress(),
+      updatedAt: new Date(),
+    },
+  });
+
+  await prisma.account.create({
+    data: {
+      id: crypto.randomUUID(),
+      accountId: "demo-tutor-account",
+      providerId: "credential",
+      userId: demoTutor.id,
+      password: hashedPassword,
+      updatedAt: new Date(),
+    },
+  });
+
+  const demoTutorProfileId = "00000000-0000-4000-b000-000000000004";
+  await prisma.tutor_profile.create({
+    data: {
+      id: demoTutorProfileId,
+      userId: demoTutor.id,
+      bio: "Demo tutor profile for testing purposes.",
+      headline: "Professional Demo Tutor",
+      hourlyRate: 50,
+      address: generateAddress(),
+      experience: 5,
+      education: "Master of Education",
+      isAvailable: true,
+      averageRating: 4.8,
+      totalReviews: 12,
+      totalSessions: 45,
+      updatedAt: new Date(),
+    },
+  });
+
+  // Create Demo Verified Tutor
+  console.log("🌟 Creating demo verified tutor...");
+  const demoVerifiedId = "00000000-0000-4000-a000-000000000005";
+  const demoVerified = await prisma.user.create({
+    data: {
+      id: demoVerifiedId,
+      name: "Verified Expert",
+      email: "verified@gmail.com",
+      phone: generatePhone(),
+      role: "VERIFIED_TUTOR",
+      emailVerified: true,
+      address: generateAddress(),
+      updatedAt: new Date(),
+    },
+  });
+
+  await prisma.account.create({
+    data: {
+      id: crypto.randomUUID(),
+      accountId: "demo-verified-account",
+      providerId: "credential",
+      userId: demoVerified.id,
+      password: hashedPassword,
+      updatedAt: new Date(),
+    },
+  });
+
+  const demoVerifiedProfileId = "00000000-0000-4000-b000-000000000005";
+  await prisma.tutor_profile.create({
+    data: {
+      id: demoVerifiedProfileId,
+      userId: demoVerified.id,
+      bio: "High authority verified tutor profile with premium features unlocked. Specializing in advanced Mathematics and Physics.",
+      headline: "Verified Academic Specialist | Top 1% Ranked Tutor",
+      hourlyRate: 75,
+      address: generateAddress(),
+      experience: 10,
+      education: "PhD in Mathematics from Stanford",
+      isAvailable: true,
+      averageRating: 5.0,
+      totalReviews: 89,
+      totalSessions: 230,
+      isFeatured: true,
+      isVerified: true,
+      updatedAt: new Date(),
+    },
+  });
+
+  // Data Seeding for Demo Users specifically
+  console.log("🛠️  Assigning data to demo accounts...");
+  
+  // Link Demo Tutors to Subjects
+  await prisma.tutor_subject.createMany({
+    data: [
+      { id: crypto.randomUUID(), tutorProfileId: demoVerifiedProfileId, subjectId: subjects[0].id }, // Calculus
+      { id: crypto.randomUUID(), tutorProfileId: demoVerifiedProfileId, subjectId: subjects[5].id }, // Physics
+      { id: crypto.randomUUID(), tutorProfileId: demoTutorProfileId, subjectId: subjects[9].id }, // English
+    ]
+  });
+
+  // Availability Slots for Demo Tutors
+  await prisma.availability_slot.createMany({
+    data: [
+      { id: crypto.randomUUID(), tutorProfileId: demoVerifiedProfileId, dayOfWeek: 1, startTime: "09:00", endTime: "12:00", isRecurring: true, updatedAt: new Date() },
+      { id: crypto.randomUUID(), tutorProfileId: demoVerifiedProfileId, dayOfWeek: 3, startTime: "14:00", endTime: "18:00", isRecurring: true, updatedAt: new Date() },
+      { id: crypto.randomUUID(), tutorProfileId: demoTutorProfileId, dayOfWeek: 2, startTime: "10:00", endTime: "15:00", isRecurring: true, updatedAt: new Date() },
+    ]
+  });
+
+  // Create Bookings for Demo Student and Tutors
+  console.log("📅 Creating demo interactions...");
+  
+  // Completed Bookings for Verified Tutor (to populate analytics)
+  for (let i = 0; i < 40; i++) {
+    const monthsAgo = Math.floor(Math.random() * 6);
+    const date = new Date();
+    date.setMonth(date.getMonth() - monthsAgo);
+    date.setDate(Math.floor(Math.random() * 28) + 1);
+
+    const bookingId = crypto.randomUUID();
+    await prisma.booking.create({
+      data: {
+        id: bookingId,
+        studentId: demoStudentId,
+        tutorProfileId: demoVerifiedProfileId,
+        scheduledAt: date,
+        duration: 90,
+        status: "COMPLETED",
+        subject: "Calculus",
+        price: 75 * 1.5,
+        notes: "Regular exam preparation session.",
+        updatedAt: new Date(),
+      }
+    });
+
+    if (i < 20) { // Add reviews for some
+        await prisma.review.create({
+            data: {
+                id: crypto.randomUUID(),
+                bookingId: bookingId,
+                studentId: demoStudentId,
+                rating: 5,
+                comment: "Excellent teaching style! Really helped me grasp complex integrations.",
+                updatedAt: new Date(),
+            }
+        });
+    }
+  }
+
+  // Active/Upcoming Bookings for Demo Student
+  await prisma.booking.create({
+    data: {
+      id: crypto.randomUUID(),
+      studentId: demoStudentId,
+      tutorProfileId: demoVerifiedProfileId,
+      scheduledAt: new Date(Date.now() + 86400000), // Tomorrow
+      duration: 60,
+      status: "CONFIRMED",
+      subject: "Physics",
+      price: 75,
+      meetingLink: "https://meet.google.com/abc-defg-hij",
+      updatedAt: new Date(),
+    }
+  });
+
+  await prisma.booking.create({
+    data: {
+      id: crypto.randomUUID(),
+      studentId: demoStudentId,
+      tutorProfileId: demoTutorProfileId,
+      scheduledAt: new Date(Date.now() + 172800000), // Day after
+      duration: 60,
+      status: "PENDING",
+      subject: "English",
+      price: 50,
+      updatedAt: new Date(),
+    }
+  });
+
+  // Create 100 Students
+  console.log("👨‍🎓 Creating 100 students...");
+  const studentIds: string[] = [];
+
+  for (let i = 0; i < 100; i++) {
+    const studentId = crypto.randomUUID();
     const studentName = generateName();
     
     const student = await prisma.user.create({
@@ -235,7 +470,7 @@ async function main() {
 
     await prisma.account.create({
       data: {
-        id: `acc-student-${i + 1}`,
+        id: crypto.randomUUID(),
         accountId: `student${i + 1}-account`,
         providerId: "credential",
         userId: student.id,
@@ -246,13 +481,13 @@ async function main() {
 
     studentIds.push(studentId);
 
-    if ((i + 1) % 500 === 0) {
+    if ((i + 1) % 20 === 0) {
       console.log(`   ✓ Created ${i + 1} students...`);
     }
   }
 
-  // Create 100 Tutors
-  console.log("👨‍🏫 Creating 100 tutors...");
+  // Create 50 Tutors
+  console.log("👨‍🏫 Creating 50 tutors...");
   const tutorProfiles: any[] = [];
   const tutorIds: string[] = [];
 
@@ -269,43 +504,11 @@ async function main() {
     "MSc in Economics from BRAC University",
   ];
 
-  for (let i = 0; i < 100; i++) {
-    const tutorId = `user-tutor-${i + 1}`;
-    const tutorName = generateName();
-    
-    const tutor = await prisma.user.create({
-      data: {
-        id: tutorId,
-        name: tutorName,
-        email: generateEmail(tutorName, i + 1),
-        phone: generatePhone(),
-        role: "TUTOR",
-        emailVerified: true,
-        address: generateAddress(),
-        updatedAt: new Date(),
-      },
-    });
-
-    await prisma.account.create({
-      data: {
-        id: `acc-tutor-${i + 1}`,
-        accountId: `tutor${i + 1}-account`,
-        providerId: "credential",
-        userId: tutor.id,
-        password: hashedPassword,
-        updatedAt: new Date(),
-      },
-    });
-
-    const experience = Math.floor(1 + Math.random() * 20);
-    const hourlyRate = Math.floor(30 + Math.random() * 120); // 30-150 BDT per hour
-    const totalSessions = Math.floor(50 + Math.random() * 500);
-    const totalReviews = Math.floor(10 + Math.random() * 100);
-    const averageRating = 3.5 + Math.random() * 1.5; // 3.5 to 5.0
-
+  for (let i = 0; i < 50; i++) {
+    const tutorProfileId = crypto.randomUUID();
     const tutorProfile = await prisma.tutor_profile.create({
       data: {
-        id: `tutor-profile-${i + 1}`,
+        id: tutorProfileId,
         userId: tutor.id,
         bio: `Experienced ${subjects[i % subjects.length].name} tutor with ${experience} years of teaching experience. Passionate about helping students achieve their academic goals.`,
         headline: `${subjects[i % subjects.length].name} Expert | ${experience} Years Experience`,
@@ -325,12 +528,12 @@ async function main() {
     tutorProfiles.push(tutorProfile);
     tutorIds.push(tutorId);
 
-    if ((i + 1) % 20 === 0) {
+    if ((i + 1) % 10 === 0) {
       console.log(`   ✓ Created ${i + 1} tutors...`);
     }
   }
 
-  // Link Tutors to Subjects (each tutor teaches 1-4 subjects)
+  // Link Tutors to Subjects
   console.log("🔗 Linking tutors to subjects...");
   for (let i = 0; i < tutorProfiles.length; i++) {
     const numSubjects = Math.floor(1 + Math.random() * 4);
@@ -341,33 +544,31 @@ async function main() {
       tutorSubjectIds.add(randomSubject.id);
     }
 
-    let subjectIndex = 0;
     for (const subjectId of tutorSubjectIds) {
       await prisma.tutor_subject.create({
         data: {
-          id: `ts-${i}-${subjectIndex}`,
+          id: crypto.randomUUID(),
           tutorProfileId: tutorProfiles[i].id,
           subjectId: subjectId,
         },
       });
-      subjectIndex++;
     }
   }
 
-  // Create Availability Slots for Tutors
+  // Create Availability Slots
   console.log("📅 Creating availability slots...");
   for (let i = 0; i < tutorProfiles.length; i++) {
-    const numSlots = Math.floor(2 + Math.random() * 5); // 2-6 slots per tutor
+    const numSlots = Math.floor(2 + Math.random() * 5);
 
     for (let j = 0; j < numSlots; j++) {
-      const dayOfWeek = Math.floor(Math.random() * 7); // 0-6 (Monday-Sunday)
-      const startHour = Math.floor(8 + Math.random() * 8); // 8 AM - 4 PM
-      const duration = Math.floor(2 + Math.random() * 4); // 2-5 hours
+      const dayOfWeek = Math.floor(Math.random() * 7);
+      const startHour = Math.floor(8 + Math.random() * 8);
+      const duration = Math.floor(2 + Math.random() * 4);
       const endHour = startHour + duration;
 
       await prisma.availability_slot.create({
         data: {
-          id: `slot-${i}-${j}`,
+          id: crypto.randomUUID(),
           tutorProfileId: tutorProfiles[i].id,
           dayOfWeek: dayOfWeek,
           startTime: `${startHour.toString().padStart(2, "0")}:00`,
@@ -379,17 +580,16 @@ async function main() {
     }
   }
 
-  // Create Bookings (15000 bookings)
-  console.log("📝 Creating 15000 bookings...");
+  // Create Bookings (500 bookings)
+  console.log("📝 Creating 500 bookings...");
   const bookingStatuses = ["PENDING", "CONFIRMED", "COMPLETED", "CANCELLED"];
   const bookingIds: string[] = [];
 
-  for (let i = 0; i < 15000; i++) {
+  for (let i = 0; i < 500; i++) {
     const studentId = studentIds[Math.floor(Math.random() * studentIds.length)];
     const tutorProfile = tutorProfiles[Math.floor(Math.random() * tutorProfiles.length)];
     const subject = subjects[Math.floor(Math.random() * subjects.length)];
     
-    // Random date in the past 6 months
     const scheduledAt = randomDate(
       new Date(Date.now() - 180 * 24 * 60 * 60 * 1000),
       new Date()
@@ -397,7 +597,7 @@ async function main() {
 
     const duration = [60, 90, 120][Math.floor(Math.random() * 3)];
     const status = bookingStatuses[Math.floor(Math.random() * bookingStatuses.length)];
-    const bookingId = `booking-${i + 1}`;
+    const bookingId = crypto.randomUUID();
 
     await prisma.booking.create({
       data: {
@@ -419,7 +619,7 @@ async function main() {
       bookingIds.push(bookingId);
     }
 
-    if ((i + 1) % 1000 === 0) {
+    if ((i + 1) % 100 === 0) {
       console.log(`   ✓ Created ${i + 1} bookings...`);
     }
   }
@@ -448,7 +648,7 @@ async function main() {
 
     await prisma.review.create({
       data: {
-        id: `review-${i + 1}`,
+        id: crypto.randomUUID(),
         bookingId: bookingId,
         studentId: studentId,
         rating: rating,

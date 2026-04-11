@@ -218,6 +218,45 @@ const updateProfile = async (req: Request, res: Response, next: NextFunction) =>
   }
 };
 
+const getAllKnowledge = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const result = await AdminService.getAllKnowledge();
+    res.status(200).json({
+      success: true,
+      data: result
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+const addKnowledge = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { content, metadata } = req.body;
+    const result = await AdminService.addKnowledge(content, metadata);
+    res.status(201).json({
+      success: true,
+      message: "Knowledge added consistently across the platform intelligence network",
+      data: result
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+const deleteKnowledge = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { id } = req.params;
+    await AdminService.deleteKnowledge(id);
+    res.status(200).json({
+      success: true,
+      message: "Knowledge entry purged from platform memory"
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
 export const AdminController = { 
   login, 
   getUsers, 
@@ -229,5 +268,8 @@ export const AdminController = {
   getPlatformStats,
   verifyTutor,
   getProfile,
-  updateProfile
+  updateProfile,
+  getAllKnowledge,
+  addKnowledge,
+  deleteKnowledge
 };

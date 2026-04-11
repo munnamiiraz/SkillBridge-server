@@ -160,4 +160,18 @@ const getReviews = async (req: Request, res: Response, next: NextFunction) => {
   }
 };
 
-export const StudentController = { updateProfile, getProfile, createReview, createBooking, getBookings, getReviewableBookings, cancelBooking, getReviews };
+const getStats = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const result = await StudentService.getStats(req.user!.id);
+    
+    res.status(200).json({
+      success: true,
+      message: "Statistics retrieved successfully",
+      data: result
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const StudentController = { updateProfile, getProfile, createReview, createBooking, getBookings, getReviewableBookings, cancelBooking, getReviews, getStats };

@@ -10,6 +10,7 @@ router.post("/reviews", auth(UserRole.STUDENT), StudentController.createReview);
 router.get("/reviews", auth(UserRole.STUDENT), StudentController.getReviews);
 router.post("/bookings", auth(UserRole.STUDENT), StudentController.createBooking);
 router.get("/bookings", auth(UserRole.STUDENT), StudentController.getBookings);
+router.get("/stats", auth(UserRole.STUDENT), StudentController.getStats);
 router.patch("/bookings/:bookingId/cancel", auth(UserRole.STUDENT), StudentController.cancelBooking);
 router.get("/reviewable-bookings", auth(UserRole.STUDENT), StudentController.getReviewableBookings);
 

@@ -238,6 +238,34 @@ const getEarningsStats = async (req: Request, res: Response, next: NextFunction)
   }
 };
 
+const getTutorAnalytics = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const result = await TutorService.getTutorAnalytics(req.user!.id);
+    
+    res.status(200).json({
+      success: true,
+      message: "Tutor analytics retrieved successfully",
+      data: result
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+const getMarketIntelligence = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const result = await TutorService.getMarketIntelligence(req.user!.id);
+    
+    res.status(200).json({
+      success: true,
+      message: "Market intelligence retrieved successfully",
+      data: result
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
 export const TutorController = { 
   createProfile, 
   updateProfile, 
@@ -249,5 +277,7 @@ export const TutorController = {
   getRatingStats, 
   updateBookingStatus,
   requestVerification,
-  getEarningsStats
+  getEarningsStats,
+  getTutorAnalytics,
+  getMarketIntelligence
 };

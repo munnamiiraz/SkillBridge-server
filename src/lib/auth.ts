@@ -82,6 +82,16 @@ export const auth = betterAuth({
     enabled: true,
     autoSignIn: true,
     requireEmailVerification: false,
+    password: {
+      hash: async (password) => {
+        const { hash } = await import("bcryptjs");
+        return await hash(password, 10);
+      },
+      verify: async ({ hash, password }) => {
+        const { compare } = await import("bcryptjs");
+        return await compare(password, hash);
+      },
+    },
   },
 
   socialProviders: {

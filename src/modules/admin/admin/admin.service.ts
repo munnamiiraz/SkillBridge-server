@@ -17,6 +17,7 @@ import {
   BookingPaginationOptions,
   PaginationOptions
 } from "./admin.interface";
+import { AIService } from "../../ai/ai.service";
 
 const login = async (data: AdminLoginInput) => {
   const validatedData = adminLoginSchema.parse(data);
@@ -32,8 +33,8 @@ const login = async (data: AdminLoginInput) => {
     throw new Error("Invalid credentials");
   }
   
-  if (signInResult.user.role !== "ADMIN") {
-    throw new Error("Access denied. Admin role required.");
+  if (signInResult.user.role !== "ADMIN" && signInResult.user.role !== "SUPER_ADMIN") {
+    throw new Error("Access denied. Administrative role required.");
   }
   
   return {
@@ -262,7 +263,7 @@ const getPlatformStats = async () => {
   const sixMonthsAgo = new Date();
   sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
 
-  const [userStats, bookingStats, revenueStats, monthlyUsers, monthlyRevenue] = await Promise.all([
+  const [userStats, bookingStats, revenueStats, monthlyUsers, monthlyRevenue, revenueByCategory] = await Promise.all([
     prisma.user.groupBy({
       by: ['role'],
       _count: { role: true }
@@ -283,6 +284,22 @@ const getPlatformStats = async () => {
     prisma.booking.findMany({
       where: { status: 'COMPLETED', scheduledAt: { gte: sixMonthsAgo } },
       select: { scheduledAt: true, price: true }
+    }),
+    prisma.booking.findMany({
+      where: { status: 'COMPLETED' },
+      include: {
+        tutor_profile: {
+          include: {
+            tutor_subject: {
+              include: {
+                subject: {
+                  include: { category: true }
+                }
+              }
+            }
+          }
+        }
+      }
     })
   ]);
 
@@ -313,6 +330,12 @@ const getPlatformStats = async () => {
     if (revenueMap[m!] !== undefined) revenueMap[m!] += b.price;
   });
 
+  const categoryStats: Record<string, number> = {};
+  revenueByCategory.forEach(b => {
+    const categoryName = b.tutor_profile?.tutor_subject?.[0]?.subject?.category?.name || 'Uncategorized';
+    categoryStats[categoryName] = (categoryStats[categoryName] || 0) + b.price;
+  });
+
   const usersByRole = userStats.reduce((acc, curr) => {
     acc[curr.role.toLowerCase()] = curr._count.role;
     return acc;
@@ -334,7 +357,8 @@ const getPlatformStats = async () => {
       userGrowth: Object.entries(growthMap).map(([month, count]) => ({ month, count })),
       revenueGrowth: Object.entries(revenueMap).map(([month, amount]) => ({ month, amount })),
       roleDistribution: userStats.map(s => ({ name: s.role, value: s._count.role })),
-      bookingDistribution: bookingStats.map(s => ({ name: s.status, value: s._count.status }))
+      bookingDistribution: bookingStats.map(s => ({ name: s.status, value: s._count.status })),
+      categoryRevenue: Object.entries(categoryStats).map(([name, value]) => ({ name, value }))
     },
     byRole: usersByRole,
     byStatus: bookingsByStatus
@@ -464,6 +488,43 @@ const updateAdminProfile = async (userId: string, data: any) => {
   });
 };
 
+const getAllKnowledge = async () => {
+  return await prisma.knowledge_base.findMany({
+    select: {
+      id: true,
+      content: true,
+      metadata: true,
+      createdAt: true
+    },
+    orderBy: {
+      createdAt: 'desc'
+    }
+  });
+};
+
+const addKnowledge = async (content: string, metadata: any = {}) => {
+  // Use AIService to handle embedding and storage via raw query (to handle vector type)
+  await AIService.addKnowledge(content, metadata);
+  
+  // Return the newly created entry (fetch it by content/timestamp since addKnowledge doesn't return ID)
+  return await prisma.knowledge_base.findFirst({
+    where: { content },
+    orderBy: { createdAt: 'desc' },
+    select: {
+      id: true,
+      content: true,
+      metadata: true,
+      createdAt: true
+    }
+  });
+};
+
+const deleteKnowledge = async (id: string) => {
+  return await prisma.knowledge_base.delete({
+    where: { id }
+  });
+};
+
 export const AdminService = { 
   login, 
   getUsers, 
@@ -473,5 +534,8 @@ export const AdminService = {
   getPlatformStats,
   verifyTutor,
   getAdminProfile,
-  updateAdminProfile
+  updateAdminProfile,
+  getAllKnowledge,
+  addKnowledge,
+  deleteKnowledge
 };
