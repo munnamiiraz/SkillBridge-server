@@ -17,6 +17,7 @@
     "seed:admin": "tsx src/scripts/seedAdmin.ts",
     "update-stats": "tsx src/scripts/updateTutorStats.ts",
     "seed": "tsx prisma/seed.ts",
+    "sync:embeddings": "tsx src/scripts/syncEmbeddings.ts",
     "postinstall": "prisma generate",
     "docker:build": "docker build -t skillbridge-server .",
     "docker:run": "docker run -p 10000:10000 skillbridge-server"
@@ -58,6 +59,7 @@
     "dotenv": "^17.2.4",
     "express": "^5.2.1",
     "express-rate-limit": "^7.5.0",
+    "googleapis": "^171.4.0",
     "helmet": "^8.1.0",
     "hpp": "^0.2.3",
     "kafkajs": "^2.2.4",

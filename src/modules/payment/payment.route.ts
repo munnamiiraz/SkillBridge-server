@@ -14,4 +14,10 @@ router.post(
   PaymentController.createCheckoutSession
 );
 
+router.get(
+  "/session/:sessionId",
+  auth(UserRole.STUDENT),
+  PaymentController.getSessionDetails
+);
+
 export const PaymentRoutes = router;

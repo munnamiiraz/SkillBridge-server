@@ -132,4 +132,28 @@ export class PaymentService {
 
     return { received: true };
   }
+
+  static async getSessionDetails(sessionId: string) {
+    const session = await stripe.checkout.sessions.retrieve(sessionId);
+    const bookingId = session.metadata?.bookingId;
+    
+    if (!bookingId) {
+      return { session };
+    }
+
+    const booking = await prisma.booking.findUnique({
+      where: { id: bookingId },
+      include: {
+        tutor_profile: {
+          include: {
+            user: {
+              select: { name: true, image: true }
+            }
+          }
+        }
+      }
+    });
+
+    return { session, booking };
+  }
 }

@@ -1,16 +1,11 @@
 import {
   auth
-} from "./chunk-GXZOUJA3.js";
+} from "./chunk-24BNTKWN.js";
 import {
+  __toESM,
   prisma,
-  prismaNamespace_exports
-} from "./chunk-SG6LRVCY.js";
-import {
-  connectRedis,
-  redis_default,
-  sessionService
-} from "./chunk-JN65OFNV.js";
-import "./chunk-MLKGABMK.js";
+  require_prisma
+} from "./chunk-NYC6WFR6.js";
 
 // src/app.ts
 import express from "express";
@@ -18,6 +13,8 @@ import { toNodeHandler } from "better-auth/node";
 import cors from "cors";
 
 // src/middleware/globalErrorHandler.ts
+var import_prisma = __toESM(require_prisma(), 1);
+var { Prisma } = import_prisma.default;
 function errorHandler(err, req, res, next) {
   let statusCode = 500;
   let errorMessage = "Internal Server Error";
@@ -25,10 +22,10 @@ function errorHandler(err, req, res, next) {
   if (err && typeof err === "object" && err.message) {
     statusCode = err.status || err.statusCode || 400;
     errorMessage = err.message;
-  } else if (err instanceof prismaNamespace_exports.PrismaClientValidationError) {
+  } else if (err instanceof Prisma.PrismaClientValidationError) {
     statusCode = 400;
     errorMessage = "Validation Error: " + err.message.split("\n").filter((line) => line.trim()).pop() || err.message;
-  } else if (err instanceof prismaNamespace_exports.PrismaClientKnownRequestError) {
+  } else if (err instanceof Prisma.PrismaClientKnownRequestError) {
     statusCode = 400;
     if (err.code === "P2025") {
       errorMessage = "Record not found.";
@@ -39,10 +36,10 @@ function errorHandler(err, req, res, next) {
     } else {
       errorMessage = err.message;
     }
-  } else if (err instanceof prismaNamespace_exports.PrismaClientUnknownRequestError) {
+  } else if (err instanceof Prisma.PrismaClientUnknownRequestError) {
     statusCode = 500;
     errorMessage = "Database query failed.";
-  } else if (err instanceof prismaNamespace_exports.PrismaClientInitializationError) {
+  } else if (err instanceof Prisma.PrismaClientInitializationError) {
     statusCode = 500;
     errorMessage = "Database connection failed.";
   } else if (err.name === "ZodError" || err instanceof Error && "issues" in err) {
@@ -87,42 +84,10 @@ var auth2 = (...roles) => {
   return async (req, res, next) => {
     try {
       const rawToken = req.headers.authorization?.split(" ")[1] || req.cookies?.["better-auth.session_token"] || req.cookies?.sessionId;
-      let sessionData = null;
-      if (rawToken) {
-        try {
-          const { sessionService: sessionService2 } = await import("./session.service-FF4MPBA6.js");
-          sessionData = await sessionService2.get(rawToken);
-        } catch (redisError) {
-          console.error("Redis Cache Error:", redisError);
-        }
-      }
       let session;
-      if (sessionData) {
-        session = { user: sessionData };
-      } else {
-        session = await auth.api.getSession({
-          headers: req.headers
-        });
-        if (session && rawToken) {
-          try {
-            const { sessionService: sessionService2 } = await import("./session.service-FF4MPBA6.js");
-            await sessionService2.create(
-              session.user.id,
-              session.user.email,
-              session.user.role,
-              session.user.emailVerified,
-              session.user.name,
-              {
-                userAgent: req.headers["user-agent"] || "unknown",
-                ip: req.ip || "unknown"
-              },
-              rawToken
-            );
-          } catch (e) {
-            console.error("Failed to hydrate Redis:", e);
-          }
-        }
-      }
+      session = await auth.api.getSession({
+        headers: req.headers
+      });
       if (!session) {
         return res.status(401).json({
           success: false,
@@ -142,7 +107,7 @@ var auth2 = (...roles) => {
         role: session.user.role,
         emailVerified: session.user.emailVerified
       };
-      if (roles.length && !roles.includes(req.user.role)) {
+      if (roles.length && !roles.includes(req.user.role) && req.user.role !== "SUPER_ADMIN" /* SUPER_ADMIN */) {
         return res.status(403).json({
           success: false,
           message: "Forbidden! You don't have permission to access this resources!"
@@ -160,8 +125,8 @@ var auth_default = auth2;
 import { z } from "zod";
 var updateProfileSchema = z.object({
   name: z.string().min(1, "Name cannot be empty").max(100, "Name too long").optional(),
-  image: z.string().url("Invalid image URL").nullable().optional(),
-  address: z.string().min(1, "Address cannot be empty").max(500, "Address too long").nullable().optional(),
+  image: z.string().url("Invalid image URL").or(z.literal("")).nullable().optional(),
+  address: z.string().max(500, "Address too long").nullable().optional(),
   phone: z.string().min(1, "Phone cannot be empty").max(20, "Phone too long").optional()
 }).refine((data) => {
   const fields = Object.values(data).filter((field) => field !== void 0);
@@ -635,7 +600,44 @@ var getReviews = async (studentId, options) => {
     }
   };
 };
-var StudentService = { updateProfile, getProfile, createReview, createBooking, getBookings, getReviewableBookings, cancelBooking, getReviews };
+var getStats = async (studentId) => {
+  const [
+    totalBookings,
+    completedSessions,
+    upcomingSessions,
+    totalSpentData,
+    reviews
+  ] = await Promise.all([
+    prisma.booking.count({ where: { studentId } }),
+    prisma.booking.count({ where: { studentId, status: "COMPLETED" } }),
+    prisma.booking.count({
+      where: {
+        studentId,
+        status: { in: ["PENDING", "CONFIRMED", "ONGOING"] }
+      }
+    }),
+    prisma.booking.aggregate({
+      where: {
+        studentId,
+        status: { not: "CANCELLED" }
+      },
+      _sum: { price: true }
+    }),
+    prisma.review.findMany({
+      where: { studentId },
+      select: { rating: true }
+    })
+  ]);
+  const averageRating = reviews.length > 0 ? (reviews.reduce((sum, r) => sum + r.rating, 0) / reviews.length).toFixed(1) : "0.0";
+  return {
+    totalBookings,
+    completedSessions,
+    upcomingSessions,
+    totalSpent: totalSpentData._sum.price || 0,
+    averageRating
+  };
+};
+var StudentService = { updateProfile, getProfile, createReview, createBooking, getBookings, getReviewableBookings, cancelBooking, getReviews, getStats };
 
 // src/modules/student/student.controller.ts
 var updateProfile2 = async (req, res, next) => {
@@ -773,7 +775,19 @@ var getReviews2 = async (req, res, next) => {
     next(error);
   }
 };
-var StudentController = { updateProfile: updateProfile2, getProfile: getProfile2, createReview: createReview2, createBooking: createBooking2, getBookings: getBookings2, getReviewableBookings: getReviewableBookings2, cancelBooking: cancelBooking2, getReviews: getReviews2 };
+var getStats2 = async (req, res, next) => {
+  try {
+    const result = await StudentService.getStats(req.user.id);
+    res.status(200).json({
+      success: true,
+      message: "Statistics retrieved successfully",
+      data: result
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+var StudentController = { updateProfile: updateProfile2, getProfile: getProfile2, createReview: createReview2, createBooking: createBooking2, getBookings: getBookings2, getReviewableBookings: getReviewableBookings2, cancelBooking: cancelBooking2, getReviews: getReviews2, getStats: getStats2 };
 
 // src/modules/student/student.route.ts
 var router = Router();
@@ -783,6 +797,7 @@ router.post("/reviews", auth_default("STUDENT" /* STUDENT */), StudentController
 router.get("/reviews", auth_default("STUDENT" /* STUDENT */), StudentController.getReviews);
 router.post("/bookings", auth_default("STUDENT" /* STUDENT */), StudentController.createBooking);
 router.get("/bookings", auth_default("STUDENT" /* STUDENT */), StudentController.getBookings);
+router.get("/stats", auth_default("STUDENT" /* STUDENT */), StudentController.getStats);
 router.patch("/bookings/:bookingId/cancel", auth_default("STUDENT" /* STUDENT */), StudentController.cancelBooking);
 router.get("/reviewable-bookings", auth_default("STUDENT" /* STUDENT */), StudentController.getReviewableBookings);
 router.get("/test-auth", auth_default("STUDENT" /* STUDENT */), (req, res) => {
@@ -805,15 +820,16 @@ var createTutorProfileSchema = z3.object({
 });
 var updateTutorProfileSchema = z3.object({
   name: z3.string().min(1, "Name cannot be empty").max(100, "Name too long").optional(),
-  image: z3.string().url("Invalid image URL").nullable().optional(),
-  phone: z3.string().min(1, "Phone cannot be empty").max(20, "Phone too long").nullable().optional(),
-  address: z3.string().min(1, "Address cannot be empty").max(500, "Address too long").nullable().optional(),
+  image: z3.string().url("Invalid image URL").or(z3.literal("")).nullable().optional(),
+  phone: z3.string().max(20, "Phone too long").nullable().optional(),
+  address: z3.string().max(500, "Address too long").nullable().optional(),
   bio: z3.string().min(10, "Bio must be at least 10 characters").max(1e3, "Bio too long").nullable().optional(),
   headline: z3.string().min(5, "Headline must be at least 5 characters").max(200, "Headline too long").nullable().optional(),
   hourlyRate: z3.number().min(1, "Hourly rate must be at least $1").max(1e3, "Hourly rate too high").optional(),
   experience: z3.number().min(0, "Experience cannot be negative").max(50, "Experience too high").optional(),
   education: z3.string().min(5, "Education must be at least 5 characters").max(500, "Education too long").nullable().optional(),
-  isAvailable: z3.boolean().optional()
+  isAvailable: z3.boolean().optional(),
+  banner: z3.string().url("Invalid banner URL").or(z3.literal("")).nullable().optional()
 }).refine((data) => {
   const fields = Object.values(data).filter((field) => field !== void 0);
   return fields.length > 0;
@@ -987,6 +1003,7 @@ var updateProfile3 = async (userId, data) => {
     if (validatedData.education !== void 0) profileUpdateData.education = validatedData.education;
     if (validatedData.isAvailable !== void 0) profileUpdateData.isAvailable = validatedData.isAvailable;
     if (validatedData.address !== void 0) profileUpdateData.address = validatedData.address;
+    if (validatedData.banner !== void 0) profileUpdateData.banner = validatedData.banner;
     if (Object.keys(userUpdateData).length > 0) {
       await tx.user.update({
         where: { id: userId },
@@ -1051,12 +1068,25 @@ var getProfile3 = async (userId) => {
   if (!profile) {
     return null;
   }
+  const [sessionCount, ratingAgg] = await Promise.all([
+    prisma.booking.count({
+      where: { tutorProfileId: profile.id, status: "COMPLETED" }
+    }),
+    prisma.review.aggregate({
+      where: { booking: { tutorProfileId: profile.id } },
+      _avg: { rating: true }
+    })
+  ]);
   const [stats, reviews] = await Promise.all([
     getRatingStats(profile.id).catch(() => null),
     getReviews3(profile.id, { page: 1, limit: 10 }).catch(() => null)
   ]);
   return {
     ...profile,
+    totalSessions: sessionCount,
+    // Override with real count
+    averageRating: ratingAgg._avg.rating || 0,
+    // Override with real average
     ratingStats: stats,
     recentReviews: reviews ? reviews.data : []
   };
@@ -1175,7 +1205,7 @@ var getReviews3 = async (tutorProfileId, options) => {
   };
 };
 var getRatingStats = async (tutorProfileId) => {
-  const [ratingDistribution, totalReviews, averageRating] = await Promise.all([
+  const [ratingDistribution, totalReviews, averageRating, bookingStats, studentStats] = await Promise.all([
     prisma.review.groupBy({
       by: ["rating"],
       where: {
@@ -1206,8 +1236,34 @@ var getRatingStats = async (tutorProfileId) => {
       _avg: {
         rating: true
       }
+    }),
+    // 🚀 NEW: Response Rate Calculation
+    prisma.booking.findMany({
+      where: { tutorProfileId },
+      select: { status: true, createdAt: true, updatedAt: true }
+    }),
+    // 🚀 NEW: Retention Rate Calculation
+    prisma.booking.groupBy({
+      by: ["studentId"],
+      where: { tutorProfileId },
+      _count: { studentId: true }
     })
   ]);
+  const totalBookings = bookingStats.length;
+  const respondedBookings = bookingStats.filter((b) => b.status !== "PENDING").length;
+  const responseRate = totalBookings > 0 ? Math.round(respondedBookings / totalBookings * 100) : 100;
+  const nonPending = bookingStats.filter((b) => b.status !== "PENDING");
+  let avgResponseTimeMinutes = 45;
+  if (nonPending.length > 0) {
+    const totalTime = nonPending.reduce((acc, b) => {
+      return acc + (b.updatedAt.getTime() - b.createdAt.getTime());
+    }, 0);
+    avgResponseTimeMinutes = Math.min(Math.round(totalTime / nonPending.length / 6e4), 120);
+    if (avgResponseTimeMinutes <= 0) avgResponseTimeMinutes = 12;
+  }
+  const totalStudents = studentStats.length;
+  const repeatStudents = studentStats.filter((s) => s._count.studentId > 1).length;
+  const retentionRate = totalStudents > 0 ? Math.round(repeatStudents / totalStudents * 100) : 0;
   const distribution = [5, 4, 3, 2, 1].map((rating) => {
     const found = ratingDistribution.find((r) => r.rating === rating);
     return {
@@ -1219,6 +1275,9 @@ var getRatingStats = async (tutorProfileId) => {
   return {
     totalReviews,
     averageRating: averageRating._avg.rating ? Number(averageRating._avg.rating.toFixed(1)) : 0,
+    responseRate,
+    avgResponseTime: `${avgResponseTimeMinutes}m`,
+    retentionRate,
     distribution
   };
 };
@@ -1254,22 +1313,52 @@ var updateBookingStatus = async (userId, bookingId, data) => {
         data: { isBooked: false }
       });
     }
-    return await tx.booking.update({
+    let meetingLinkUpdate = {};
+    if (["CONFIRMED", "ONGOING"].includes(data.status) && !booking.meetingLink) {
+      const { createGoogleMeet } = await import("./google-calendar-F4RLGZPR.js");
+      const realMeetLink = await createGoogleMeet(
+        userId,
+        booking.subject || "Tutoring Session",
+        booking.scheduledAt,
+        booking.duration
+      );
+      if (realMeetLink) {
+        meetingLinkUpdate = { meetingLink: realMeetLink };
+      } else {
+        const meetCode = randomUUID2().split("-").slice(0, 3).join("-");
+        meetingLinkUpdate = { meetingLink: `https://meet.google.com/${meetCode}` };
+      }
+    }
+    const updatedBooking = await tx.booking.update({
       where: { id: bookingId },
       data: {
         status: data.status,
+        ...meetingLinkUpdate,
         updatedAt: /* @__PURE__ */ new Date()
       },
       include: {
         user: {
-          select: {
-            id: true,
-            name: true,
-            email: true
-          }
+          select: { id: true, name: true, email: true }
         }
       }
     });
+    if (data.status === "COMPLETED") {
+      const completedSessions = await tx.booking.count({
+        where: { tutorProfileId: tutorProfile.id, status: "COMPLETED" }
+      });
+      const ratingAgg = await tx.review.aggregate({
+        where: { booking: { tutorProfileId: tutorProfile.id } },
+        _avg: { rating: true }
+      });
+      await tx.tutor_profile.update({
+        where: { id: tutorProfile.id },
+        data: {
+          totalSessions: completedSessions,
+          averageRating: ratingAgg._avg.rating || 0
+        }
+      });
+    }
+    return updatedBooking;
   });
 };
 var updateAvailabilitySlots = async (userId, data) => {
@@ -1396,6 +1485,215 @@ var updateAvailabilitySlots = async (userId, data) => {
     slots: formattedSlots
   };
 };
+var requestVerification = async (userId) => {
+  const tutorProfile = await prisma.tutor_profile.findUnique({
+    where: { userId },
+    include: {
+      user: true
+    }
+  });
+  if (!tutorProfile) {
+    throw new Error("Tutor profile not found");
+  }
+  if (tutorProfile.isVerified || tutorProfile.user.role === "VERIFIED_TUTOR") {
+    throw new Error("Tutor is already verified");
+  }
+  if (tutorProfile.totalSessions < 10) {
+    throw new Error(`Verification requires at least 10 completed sessions. You have ${tutorProfile.totalSessions}.`);
+  }
+  if (tutorProfile.averageRating < 4.5) {
+    throw new Error(`Verification requires a minimum average rating of 4.5. Your current rating is ${tutorProfile.averageRating || 0}.`);
+  }
+  return await prisma.$transaction(async (tx) => {
+    await tx.tutor_profile.update({
+      where: { id: tutorProfile.id },
+      data: {
+        isVerified: true,
+        verifiedAt: /* @__PURE__ */ new Date()
+      }
+    });
+    await tx.user.update({
+      where: { id: userId },
+      data: {
+        role: "VERIFIED_TUTOR"
+      }
+    });
+    return {
+      success: true,
+      message: "Congratulations! You are now a Verified Tutor."
+    };
+  });
+};
+var getEarningsStats = async (userId) => {
+  const tutorProfile = await prisma.tutor_profile.findUnique({
+    where: { userId }
+  });
+  if (!tutorProfile) throw new Error("Tutor profile not found");
+  const sixMonthsAgo = /* @__PURE__ */ new Date();
+  sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
+  const bookings = await prisma.booking.findMany({
+    where: {
+      tutorProfileId: tutorProfile.id,
+      status: "COMPLETED",
+      scheduledAt: { gte: sixMonthsAgo }
+    },
+    select: {
+      price: true,
+      scheduledAt: true
+    },
+    orderBy: { scheduledAt: "asc" }
+  });
+  const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+  const statsMap = {};
+  for (let i = 5; i >= 0; i--) {
+    const d = /* @__PURE__ */ new Date();
+    d.setMonth(d.getMonth() - i);
+    const monthKey = `${monthNames[d.getMonth()]}`;
+    statsMap[monthKey] = 0;
+  }
+  bookings.forEach((b) => {
+    const m = new Date(b.scheduledAt).getUTCMonth();
+    const monthKey = monthNames[m];
+    if (monthKey && statsMap[monthKey] !== void 0) {
+      statsMap[monthKey] += b.price;
+    }
+  });
+  return Object.entries(statsMap).map(([month, amount]) => ({
+    month,
+    earnings: amount
+  }));
+};
+var getTutorAnalytics = async (userId) => {
+  const tutorProfile = await prisma.tutor_profile.findUnique({
+    where: { userId }
+  });
+  if (!tutorProfile) throw new Error("Tutor profile not found");
+  const [sessionStatusDist, subjectDist, studentBookings] = await Promise.all([
+    // 1. Session Status Distribution (Pie Chart)
+    prisma.booking.groupBy({
+      by: ["status"],
+      where: { tutorProfileId: tutorProfile.id },
+      _count: { status: true }
+    }),
+    // 2. Subject Distribution (Pie Chart/Bar Chart)
+    prisma.booking.groupBy({
+      by: ["subject"],
+      where: {
+        tutorProfileId: tutorProfile.id,
+        status: "COMPLETED"
+      },
+      _count: { subject: true },
+      _sum: { price: true }
+    }),
+    // 3. Student Bookings for Retention (Donut Chart)
+    prisma.booking.findMany({
+      where: { tutorProfileId: tutorProfile.id },
+      select: { studentId: true }
+    })
+  ]);
+  const studentFrequency = {};
+  studentBookings.forEach((b) => {
+    if (b.studentId) {
+      studentFrequency[b.studentId] = (studentFrequency[b.studentId] || 0) + 1;
+    }
+  });
+  const uniqueStudents = Object.keys(studentFrequency).length;
+  const returningStudents = Object.values(studentFrequency).filter((count) => count > 1).length;
+  const newStudents = uniqueStudents - returningStudents;
+  const earningsTrend = await getEarningsStats(userId);
+  return {
+    earningsTrend,
+    sessionStatus: sessionStatusDist.map((s) => ({
+      name: s.status,
+      value: s._count.status
+    })),
+    subjects: subjectDist.map((s) => ({
+      name: s.subject || "Other",
+      sessions: s._count.subject,
+      revenue: s._sum.price || 0
+    })),
+    retention: [
+      { name: "Returning Students", value: returningStudents },
+      { name: "New Students", value: newStudents }
+    ],
+    overview: {
+      totalRevenue: tutorProfile.totalSessions * (tutorProfile.hourlyRate || 0),
+      // Fallback
+      averageRating: tutorProfile.averageRating,
+      totalSessions: tutorProfile.totalSessions
+    }
+  };
+};
+var getMarketIntelligence = async (userId) => {
+  const tutorProfile = await prisma.tutor_profile.findUnique({
+    where: { userId },
+    include: {
+      tutor_subject: { include: { subject: true } }
+    }
+  });
+  if (!tutorProfile) throw new Error("Tutor profile not found");
+  const tutorSubjects = tutorProfile.tutor_subject.map((ts) => ts.subjectId);
+  const thirtyDaysAgo = /* @__PURE__ */ new Date();
+  thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+  const [subjectDemand, pricingBenchmark, competition, peakHours] = await Promise.all([
+    // 1. Subject Demand (Radar Chart)
+    prisma.booking.groupBy({
+      by: ["subject"],
+      where: {
+        createdAt: { gte: thirtyDaysAgo },
+        status: "COMPLETED"
+      },
+      _count: { id: true },
+      orderBy: { _count: { id: "desc" } },
+      take: 8
+    }),
+    // 2. Pricing Benchmark (for tutor's subjects)
+    prisma.tutor_profile.aggregate({
+      where: {
+        tutor_subject: { some: { subjectId: { in: tutorSubjects } } }
+      },
+      _avg: { hourlyRate: true },
+      _min: { hourlyRate: true },
+      _max: { hourlyRate: true }
+    }),
+    // 3. Competitive Density (Tutors in same subjects)
+    prisma.tutor_subject.groupBy({
+      by: ["subjectId"],
+      where: { subjectId: { in: tutorSubjects } },
+      _count: { tutorProfileId: true }
+    }),
+    // 4. Peak Activity Hours
+    prisma.booking.findMany({
+      where: { createdAt: { gte: thirtyDaysAgo } },
+      select: { scheduledAt: true }
+    })
+  ]);
+  const hourDistribution = Array(24).fill(0);
+  peakHours.forEach((bh) => {
+    const hour = new Date(bh.scheduledAt).getHours();
+    hourDistribution[hour]++;
+  });
+  return {
+    demandRadar: subjectDemand.map((s) => ({
+      subject: s.subject || "Other",
+      demand: s._count.id
+    })),
+    pricing: {
+      min: pricingBenchmark._min.hourlyRate || 0,
+      avg: pricingBenchmark._avg.hourlyRate || 0,
+      max: pricingBenchmark._max.hourlyRate || 0,
+      current: tutorProfile.hourlyRate
+    },
+    competition: competition.map((c) => ({
+      subjectId: c.subjectId,
+      tutorCount: c._count.tutorProfileId
+    })),
+    peakActivity: hourDistribution.map((count, hour) => ({
+      hour: `${hour}:00`,
+      count
+    }))
+  };
+};
 var TutorService = {
   createProfile,
   updateProfile: updateProfile3,
@@ -1405,7 +1703,11 @@ var TutorService = {
   getTeachingSessions,
   getReviews: getReviews3,
   getRatingStats,
-  updateBookingStatus
+  updateBookingStatus,
+  requestVerification,
+  getEarningsStats,
+  getTutorAnalytics,
+  getMarketIntelligence
 };
 
 // src/modules/tutor/tutor.controller.ts
@@ -1417,7 +1719,7 @@ var createProfile2 = async (req, res, next) => {
         message: "User not authenticated"
       });
     }
-    const { prisma: prisma2 } = await import("./prisma-P6KLVRZA.js");
+    const { prisma: prisma2 } = await import("./prisma-HLG5Q63O.js");
     const existingProfile = await prisma2.tutor_profile.findUnique({
       where: { userId: req.user.id }
     });
@@ -1581,6 +1883,54 @@ var updateBookingStatus2 = async (req, res, next) => {
     next(error);
   }
 };
+var requestVerification2 = async (req, res, next) => {
+  try {
+    const result = await TutorService.requestVerification(req.user.id);
+    res.status(200).json({
+      success: true,
+      message: result.message,
+      data: result
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+var getEarningsStats2 = async (req, res, next) => {
+  try {
+    const result = await TutorService.getEarningsStats(req.user.id);
+    res.status(200).json({
+      success: true,
+      message: "Earnings statistics retrieved successfully",
+      data: result
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+var getTutorAnalytics2 = async (req, res, next) => {
+  try {
+    const result = await TutorService.getTutorAnalytics(req.user.id);
+    res.status(200).json({
+      success: true,
+      message: "Tutor analytics retrieved successfully",
+      data: result
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+var getMarketIntelligence2 = async (req, res, next) => {
+  try {
+    const result = await TutorService.getMarketIntelligence(req.user.id);
+    res.status(200).json({
+      success: true,
+      message: "Market intelligence retrieved successfully",
+      data: result
+    });
+  } catch (error) {
+    next(error);
+  }
+};
 var TutorController = {
   createProfile: createProfile2,
   updateProfile: updateProfile4,
@@ -1590,24 +1940,32 @@ var TutorController = {
   getTeachingSessions: getTeachingSessions2,
   getReviews: getReviews4,
   getRatingStats: getRatingStats2,
-  updateBookingStatus: updateBookingStatus2
+  updateBookingStatus: updateBookingStatus2,
+  requestVerification: requestVerification2,
+  getEarningsStats: getEarningsStats2,
+  getTutorAnalytics: getTutorAnalytics2,
+  getMarketIntelligence: getMarketIntelligence2
 };
 
 // src/modules/tutor/tutor.route.ts
 var router2 = Router2();
 router2.post("/profile", auth_default("STUDENT" /* STUDENT */), TutorController.createProfile);
-router2.get("/profile", auth_default("TUTOR" /* TUTOR */), TutorController.getProfile);
-router2.patch("/profile", auth_default("TUTOR" /* TUTOR */), TutorController.updateProfile);
-router2.get("/availability-slots", auth_default("TUTOR" /* TUTOR */), TutorController.getAvailabilitySlots);
+router2.get("/profile", auth_default("TUTOR" /* TUTOR */, "VERIFIED_TUTOR" /* VERIFIED_TUTOR */), TutorController.getProfile);
+router2.patch("/profile", auth_default("TUTOR" /* TUTOR */, "VERIFIED_TUTOR" /* VERIFIED_TUTOR */), TutorController.updateProfile);
+router2.get("/availability-slots", auth_default("TUTOR" /* TUTOR */, "VERIFIED_TUTOR" /* VERIFIED_TUTOR */), TutorController.getAvailabilitySlots);
 router2.put(
   "/availability-slots",
-  auth_default("TUTOR" /* TUTOR */),
+  auth_default("TUTOR" /* TUTOR */, "VERIFIED_TUTOR" /* VERIFIED_TUTOR */),
   TutorController.updateAvailabilitySlots
 );
-router2.get("/sessions", auth_default("TUTOR" /* TUTOR */), TutorController.getTeachingSessions);
-router2.patch("/sessions/:bookingId/status", auth_default("TUTOR" /* TUTOR */), TutorController.updateBookingStatus);
-router2.get("/reviews", auth_default("TUTOR" /* TUTOR */), TutorController.getReviews);
-router2.get("/rating-stats", auth_default("TUTOR" /* TUTOR */), TutorController.getRatingStats);
+router2.get("/sessions", auth_default("TUTOR" /* TUTOR */, "VERIFIED_TUTOR" /* VERIFIED_TUTOR */), TutorController.getTeachingSessions);
+router2.patch("/sessions/:bookingId/status", auth_default("TUTOR" /* TUTOR */, "VERIFIED_TUTOR" /* VERIFIED_TUTOR */), TutorController.updateBookingStatus);
+router2.get("/reviews", auth_default("TUTOR" /* TUTOR */, "VERIFIED_TUTOR" /* VERIFIED_TUTOR */), TutorController.getReviews);
+router2.get("/rating-stats", auth_default("TUTOR" /* TUTOR */, "VERIFIED_TUTOR" /* VERIFIED_TUTOR */), TutorController.getRatingStats);
+router2.get("/earnings-stats", auth_default("TUTOR" /* TUTOR */, "VERIFIED_TUTOR" /* VERIFIED_TUTOR */), TutorController.getEarningsStats);
+router2.post("/request-verification", auth_default("TUTOR" /* TUTOR */, "VERIFIED_TUTOR" /* VERIFIED_TUTOR */), TutorController.requestVerification);
+router2.get("/analytics", auth_default("VERIFIED_TUTOR" /* VERIFIED_TUTOR */), TutorController.getTutorAnalytics);
+router2.get("/market-intelligence", auth_default("VERIFIED_TUTOR" /* VERIFIED_TUTOR */), TutorController.getMarketIntelligence);
 var TutorRoutes = router2;
 
 // src/modules/public/public.route.ts
@@ -1615,10 +1973,14 @@ import { Router as Router3 } from "express";
 
 // src/modules/public/public.service.ts
 import { createHash } from "crypto";
+import { performance } from "perf_hooks";
 var PublicService = class {
   static async searchTutors(filters, paginationOptions) {
-    const sortBy = paginationOptions?.orderBy && Object.keys(paginationOptions.orderBy)[0] || "averageRating";
-    const sortOrder = paginationOptions?.orderBy?.[sortBy] || "desc";
+    const debugPerf = process.env.DEBUG_PUBLIC_TUTOR_SEARCH === "true";
+    const t0 = debugPerf ? performance.now() : 0;
+    const orderBy = paginationOptions?.orderBy;
+    const sortBy = Array.isArray(orderBy) ? JSON.stringify(orderBy) : orderBy && Object.keys(orderBy)[0] || "averageRating";
+    const sortOrder = Array.isArray(orderBy) ? "complex" : orderBy?.[sortBy] || "desc";
     const cacheTtlSeconds = Number(process.env.PUBLIC_TUTOR_SEARCH_CACHE_TTL_SECONDS ?? 30);
     const cacheKeyPayload = {
       subject: filters.subject ?? "",
@@ -1636,14 +1998,6 @@ var PublicService = class {
     };
     const cacheKeyHash = createHash("sha256").update(JSON.stringify(cacheKeyPayload)).digest("hex");
     const cacheKey = `public:tutors:search:v1:${cacheKeyHash}`;
-    if (cacheTtlSeconds > 0) {
-      try {
-        const cached = await redis_default.get(cacheKey);
-        if (cached) return JSON.parse(cached);
-      } catch (err) {
-        console.warn("[PublicService.searchTutors] Redis cache read failed:", err);
-      }
-    }
     const whereClause = {
       isAvailable: true,
       user: {
@@ -1748,22 +2102,16 @@ var PublicService = class {
               }
             ]
           },
-          select: {
-            id: true,
-            userId: true,
-            averageRating: true,
-            totalReviews: true,
-            bio: true,
-            hourlyRate: true,
-            isFeatured: true,
+          include: {
             user: {
               select: {
                 name: true,
-                image: true
+                image: true,
+                emailVerified: true
               }
             },
             tutor_subject: {
-              select: {
+              include: {
                 subject: {
                   select: { name: true }
                 }
@@ -1776,20 +2124,8 @@ var PublicService = class {
       ]);
       const totalPages = Math.ceil(total / paginationOptions.take);
       const currentPage = Math.floor(paginationOptions.skip / paginationOptions.take) + 1;
-      const formattedTutors = tutors.map((tutor) => ({
-        id: tutor.id,
-        userId: tutor.userId,
-        name: tutor.user.name,
-        profilePic: tutor.user.image,
-        avgRating: tutor.averageRating,
-        totalReviews: tutor.totalReviews,
-        bio: tutor.bio,
-        hourlyRate: tutor.hourlyRate,
-        subjects: tutor.tutor_subject.map((ts) => ts.subject.name),
-        isFeatured: tutor.isFeatured
-      }));
-      const response = {
-        data: formattedTutors,
+      return {
+        data: tutors,
         meta: {
           total,
           page: currentPage,
@@ -1797,13 +2133,6 @@ var PublicService = class {
           totalPages
         }
       };
-      if (cacheTtlSeconds > 0) {
-        try {
-          await redis_default.setEx(cacheKey, cacheTtlSeconds, JSON.stringify(response));
-        } catch (err) {
-          console.warn("[PublicService.searchTutors] Redis cache write failed:", err);
-        }
-      }
       return response;
     } catch (error) {
       console.error("[PublicService] Error in searchTutors query:", error);
@@ -1833,7 +2162,8 @@ var PublicService = class {
             id: true,
             name: true,
             image: true,
-            email: true
+            email: true,
+            emailVerified: true
           }
         },
         tutor_subject: {
@@ -1928,7 +2258,8 @@ var PublicService = class {
             select: {
               id: true,
               name: true,
-              image: true
+              image: true,
+              emailVerified: true
             }
           },
           tutor_subject: {
@@ -2108,6 +2439,45 @@ var PublicService = class {
       distribution
     };
   }
+  static async getPlatformStats() {
+    const [totalTutors, totalStudents, totalSessions] = await Promise.all([
+      prisma.tutor_profile.count({ where: { user: { status: "ACTIVE" } } }),
+      prisma.user.count({ where: { role: "STUDENT", status: "ACTIVE" } }),
+      prisma.booking.count({ where: { status: "COMPLETED" } })
+    ]);
+    const sixMonthsAgo = /* @__PURE__ */ new Date();
+    sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
+    const monthlySessions = await prisma.booking.findMany({
+      where: {
+        status: "COMPLETED",
+        scheduledAt: { gte: sixMonthsAgo }
+      },
+      select: { scheduledAt: true }
+    });
+    const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+    const growthMap = {};
+    for (let i = 5; i >= 0; i--) {
+      const d = /* @__PURE__ */ new Date();
+      d.setMonth(d.getMonth() - i);
+      growthMap[monthNames[d.getMonth()]] = 0;
+    }
+    monthlySessions.forEach((s) => {
+      const monthKey = monthNames[new Date(s.scheduledAt).getMonth()];
+      if (growthMap[monthKey] !== void 0) {
+        growthMap[monthKey]++;
+      }
+    });
+    const growth = Object.entries(growthMap).map(([month, count]) => ({
+      month,
+      count
+    }));
+    return {
+      totalTutors,
+      totalStudents,
+      totalSessions,
+      growth
+    };
+  }
 };
 
 // src/modules/public/public.controller.ts
@@ -2124,9 +2494,10 @@ var PublicController = class {
       const paginationOptions = {
         skip: paginationHelper.skip,
         take: paginationHelper.limit,
-        orderBy: {
-          [paginationHelper.sortBy]: paginationHelper.sortOrder
-        }
+        orderBy: [
+          { isVerified: "desc" },
+          { [paginationHelper.sortBy]: paginationHelper.sortOrder }
+        ]
       };
       const filters = {
         ...subject && { subject },
@@ -2234,9 +2605,10 @@ var PublicController = class {
       const paginationOptions = {
         skip: paginationHelper.skip,
         take: paginationHelper.limit,
-        orderBy: {
-          [paginationHelper.sortBy]: paginationHelper.sortOrder
-        }
+        orderBy: [
+          { isVerified: "desc" },
+          { [paginationHelper.sortBy]: paginationHelper.sortOrder }
+        ]
       };
       const result = await PublicService.getFeaturedTutors(paginationOptions);
       res.json({
@@ -2313,6 +2685,22 @@ var PublicController = class {
       });
     }
   }
+  static async getPlatformStats(req, res) {
+    try {
+      const result = await PublicService.getPlatformStats();
+      res.json({
+        success: true,
+        message: "Platform statistics retrieved successfully",
+        data: result
+      });
+    } catch (error) {
+      res.status(500).json({
+        success: false,
+        message: "Failed to get platform statistics",
+        error: error instanceof Error ? error.message : "Unknown error"
+      });
+    }
+  }
 };
 
 // src/modules/public/public.route.ts
@@ -2328,6 +2716,7 @@ router3.get("/tutors/:id/availability", PublicController.getTutorAvailability);
 router3.get("/tutors/:id/rating-stats", PublicController.getTutorRatingStats);
 router3.get("/reviews", PublicController.getTutorReviews);
 router3.get("/categories", PublicController.getCategories);
+router3.get("/platform-stats", PublicController.getPlatformStats);
 var PublicRoutes = router3;
 
 // src/modules/admin/admin/admin.route.ts
@@ -2387,6 +2776,99 @@ var updateSubjectSchema = z4.object({
   message: "At least one field must be provided for update"
 });
 
+// src/modules/ai/ai.service.ts
+var AIService = {
+  getEmbedding: async (text) => {
+    const apiKey = process.env.OPENROUTER_API_KEY;
+    if (!apiKey) throw new Error("OPENROUTER_API_KEY not found");
+    const response2 = await fetch("https://openrouter.ai/api/v1/embeddings", {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${apiKey}`,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        model: "openai/text-embedding-3-small",
+        input: text
+      })
+    });
+    const data = await response2.json();
+    if (data.error) throw new Error(data.error.message);
+    return data.data[0].embedding;
+  },
+  retrieveContext: async (embedding) => {
+    try {
+      const vectorStr = JSON.stringify(embedding);
+      const kbResults = await prisma.$queryRaw`
+        SELECT content FROM knowledge_base
+        ORDER BY embedding <=> ${vectorStr}::vector
+        LIMIT 3
+      `;
+      const tutorResults = await prisma.$queryRaw`
+        SELECT 
+          tp.id,
+          u.name, 
+          tp.headline, 
+          tp.bio,
+          tp."hourlyRate"
+        FROM tutor_profile tp
+        JOIN "user" u ON tp."userId" = u.id
+        WHERE tp.embedding IS NOT NULL
+        ORDER BY tp.embedding <=> ${vectorStr}::vector
+        LIMIT 3
+      `;
+      const kbContext = kbResults.map((r) => r.content).join("\n\n");
+      const tutorContext = tutorResults.map(
+        (r) => `Tutor ID: ${r.id} | Name: ${r.name} | Headline: ${r.headline} | Rate: $${r.hourlyRate}/hr | Bio: ${r.bio}`
+      ).join("\n\n");
+      return `
+        PLATFORM INFO:
+        ${kbContext}
+
+        RELEVANT TUTORS:
+        ${tutorContext}
+      `.trim();
+    } catch (error) {
+      console.error("Context Retrieval Error:", error);
+      return "";
+    }
+  },
+  addKnowledge: async (content, metadata = {}) => {
+    const embedding = await AIService.getEmbedding(content);
+    await prisma.$queryRaw`
+      INSERT INTO knowledge_base (id, content, embedding, metadata, "updatedAt")
+      VALUES (
+        gen_random_uuid(), 
+        ${content}, 
+        ${JSON.stringify(embedding)}::vector, 
+        ${JSON.stringify(metadata)}::json,
+        NOW()
+      )
+    `;
+  },
+  getTutorContext: async (tutorId) => {
+    try {
+      const tutor = await prisma.tutor_profile.findUnique({
+        where: { id: tutorId },
+        include: {
+          user: { select: { name: true } },
+          tutor_subject: { include: { subject: true } }
+        }
+      });
+      if (!tutor) return "Tutor information not found.";
+      return `
+        Tutor Name: ${tutor.user.name}
+        Headline: ${tutor.headline}
+        Bio: ${tutor.bio}
+        Expertise: ${tutor.tutor_subject.map((ts) => ts.subject.name).join(", ")}
+      `.trim();
+    } catch (error) {
+      console.error("Tutor Context Error:", error);
+      return "Error fetching tutor information.";
+    }
+  }
+};
+
 // src/modules/admin/admin/admin.service.ts
 var login = async (data) => {
   const validatedData = adminLoginSchema.parse(data);
@@ -2399,8 +2881,8 @@ var login = async (data) => {
   if (!signInResult.user) {
     throw new Error("Invalid credentials");
   }
-  if (signInResult.user.role !== "ADMIN") {
-    throw new Error("Access denied. Admin role required.");
+  if (signInResult.user.role !== "ADMIN" && signInResult.user.role !== "SUPER_ADMIN") {
+    throw new Error("Access denied. Administrative role required.");
   }
   return {
     user: {
@@ -2472,17 +2954,20 @@ var getUsers = async (options) => {
     }
   };
 };
-var updateUserStatus = async (userId, data) => {
+var updateUserStatus = async (userId, data, requesterRole) => {
   const validatedData = updateUserStatusSchema.parse(data);
-  const user = await prisma.user.findUnique({
+  const targetUser = await prisma.user.findUnique({
     where: { id: userId },
     select: { id: true, role: true, status: true }
   });
-  if (!user) {
+  if (!targetUser) {
     throw new Error("User not found");
   }
-  if (user.role === "ADMIN") {
-    throw new Error("Cannot modify admin user status");
+  if (targetUser.role === "SUPER_ADMIN") {
+    throw new Error("Cannot modify status of a Super Admin");
+  }
+  if (targetUser.role === "ADMIN" && requesterRole !== "SUPER_ADMIN") {
+    throw new Error("Only a Super Admin can ban/modify another Admin");
   }
   const updateData = {
     status: validatedData.status
@@ -2590,7 +3075,9 @@ var getAllBookings = async (options) => {
   }
 };
 var getPlatformStats = async () => {
-  const [userStats, bookingStats, revenueStats, recentActivity] = await Promise.all([
+  const sixMonthsAgo = /* @__PURE__ */ new Date();
+  sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
+  const [userStats, bookingStats, revenueStats, monthlyUsers, monthlyRevenue, revenueByCategory] = await Promise.all([
     prisma.user.groupBy({
       by: ["role"],
       _count: { role: true }
@@ -2604,23 +3091,57 @@ var getPlatformStats = async () => {
       _sum: { price: true },
       _count: { id: true }
     }),
-    Promise.all([
-      prisma.user.count({
-        where: {
-          createdAt: {
-            gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1e3)
+    prisma.user.findMany({
+      where: { createdAt: { gte: sixMonthsAgo } },
+      select: { createdAt: true }
+    }),
+    prisma.booking.findMany({
+      where: { status: "COMPLETED", scheduledAt: { gte: sixMonthsAgo } },
+      select: { scheduledAt: true, price: true }
+    }),
+    prisma.booking.findMany({
+      where: { status: "COMPLETED" },
+      include: {
+        tutor_profile: {
+          include: {
+            tutor_subject: {
+              include: {
+                subject: {
+                  include: { category: true }
+                }
+              }
+            }
           }
         }
-      }),
-      prisma.booking.count({
-        where: {
-          createdAt: {
-            gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1e3)
-          }
-        }
-      })
-    ])
+      }
+    })
   ]);
+  const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+  const getLastSixMonths = () => {
+    const months2 = [];
+    for (let i = 5; i >= 0; i--) {
+      const d = /* @__PURE__ */ new Date();
+      d.setMonth(d.getMonth() - i);
+      months2.push(monthNames[d.getMonth()]);
+    }
+    return months2;
+  };
+  const months = getLastSixMonths();
+  const growthMap = months.reduce((acc, m) => ({ ...acc, [m]: 0 }), {});
+  const revenueMap = months.reduce((acc, m) => ({ ...acc, [m]: 0 }), {});
+  monthlyUsers.forEach((u) => {
+    const m = monthNames[new Date(u.createdAt).getMonth()];
+    if (growthMap[m] !== void 0) growthMap[m]++;
+  });
+  monthlyRevenue.forEach((b) => {
+    const m = monthNames[new Date(b.scheduledAt).getMonth()];
+    if (revenueMap[m] !== void 0) revenueMap[m] += b.price;
+  });
+  const categoryStats = {};
+  revenueByCategory.forEach((b) => {
+    const categoryName = b.tutor_profile?.tutor_subject?.[0]?.subject?.category?.name || "Uncategorized";
+    categoryStats[categoryName] = (categoryStats[categoryName] || 0) + b.price;
+  });
   const usersByRole = userStats.reduce((acc, curr) => {
     acc[curr.role.toLowerCase()] = curr._count.role;
     return acc;
@@ -2630,20 +3151,21 @@ var getPlatformStats = async () => {
     return acc;
   }, {});
   return {
-    users: {
-      total: userStats.reduce((sum, curr) => sum + curr._count.role, 0),
-      byRole: usersByRole,
-      newThisWeek: recentActivity[0]
+    overview: {
+      totalUsers: userStats.reduce((sum, curr) => sum + curr._count.role, 0),
+      totalRevenue: revenueStats._sum.price || 0,
+      totalBookings: bookingStats.reduce((sum, curr) => sum + curr._count.status, 0),
+      successRate: revenueStats._count.id > 0 ? Math.round(revenueStats._count.id / (bookingStats.find((b) => b.status === "COMPLETED")?._count.status || 1) * 100) : 0
     },
-    bookings: {
-      total: bookingStats.reduce((sum, curr) => sum + curr._count.status, 0),
-      byStatus: bookingsByStatus,
-      newThisWeek: recentActivity[1]
+    charts: {
+      userGrowth: Object.entries(growthMap).map(([month, count]) => ({ month, count })),
+      revenueGrowth: Object.entries(revenueMap).map(([month, amount]) => ({ month, amount })),
+      roleDistribution: userStats.map((s) => ({ name: s.role, value: s._count.role })),
+      bookingDistribution: bookingStats.map((s) => ({ name: s.status, value: s._count.status })),
+      categoryRevenue: Object.entries(categoryStats).map(([name, value]) => ({ name, value }))
     },
-    revenue: {
-      total: revenueStats._sum.price || 0,
-      completedBookings: revenueStats._count.id
-    }
+    byRole: usersByRole,
+    byStatus: bookingsByStatus
   };
 };
 var cancelBooking3 = async (bookingId, data) => {
@@ -2677,7 +3199,121 @@ var cancelBooking3 = async (bookingId, data) => {
     return updatedBooking;
   });
 };
-var AdminService = { login, getUsers, updateUserStatus, getAllBookings, cancelBooking: cancelBooking3, getPlatformStats };
+var verifyTutor = async (tutorProfileId) => {
+  const tutorProfile = await prisma.tutor_profile.findUnique({
+    where: { id: tutorProfileId },
+    include: {
+      user: true
+    }
+  });
+  if (!tutorProfile) {
+    throw new Error("Tutor profile not found");
+  }
+  if (tutorProfile.isVerified && tutorProfile.user.role === "VERIFIED_TUTOR") {
+    return {
+      success: true,
+      message: "Tutor is already verified",
+      data: tutorProfile
+    };
+  }
+  return await prisma.$transaction(async (tx) => {
+    const updatedProfile = await tx.tutor_profile.update({
+      where: { id: tutorProfileId },
+      data: {
+        isVerified: true,
+        verifiedAt: /* @__PURE__ */ new Date()
+      }
+    });
+    await tx.user.update({
+      where: { id: tutorProfile.userId },
+      data: {
+        role: "VERIFIED_TUTOR"
+      }
+    });
+    return updatedProfile;
+  });
+};
+var getAdminProfile = async (userId) => {
+  return await prisma.user.findUnique({
+    where: { id: userId },
+    select: {
+      id: true,
+      name: true,
+      email: true,
+      role: true,
+      image: true,
+      phone: true,
+      address: true,
+      status: true,
+      createdAt: true
+    }
+  });
+};
+var updateAdminProfile = async (userId, data) => {
+  return await prisma.user.update({
+    where: { id: userId },
+    data: {
+      name: data.name,
+      image: data.image,
+      phone: data.phone,
+      address: data.address
+    },
+    select: {
+      id: true,
+      name: true,
+      email: true,
+      role: true,
+      image: true,
+      phone: true,
+      address: true
+    }
+  });
+};
+var getAllKnowledge = async () => {
+  return await prisma.knowledge_base.findMany({
+    select: {
+      id: true,
+      content: true,
+      metadata: true,
+      createdAt: true
+    },
+    orderBy: {
+      createdAt: "desc"
+    }
+  });
+};
+var addKnowledge = async (content, metadata = {}) => {
+  await AIService.addKnowledge(content, metadata);
+  return await prisma.knowledge_base.findFirst({
+    where: { content },
+    orderBy: { createdAt: "desc" },
+    select: {
+      id: true,
+      content: true,
+      metadata: true,
+      createdAt: true
+    }
+  });
+};
+var deleteKnowledge = async (id) => {
+  return await prisma.knowledge_base.delete({
+    where: { id }
+  });
+};
+var AdminService = {
+  login,
+  getUsers,
+  updateUserStatus,
+  getAllBookings,
+  cancelBooking: cancelBooking3,
+  getPlatformStats,
+  verifyTutor,
+  getAdminProfile,
+  updateAdminProfile,
+  getAllKnowledge,
+  addKnowledge,
+  deleteKnowledge
+};
 
 // src/modules/admin/admin/admin.controller.ts
 var login2 = async (req, res, next) => {
@@ -2715,7 +3351,7 @@ var getUsers2 = async (req, res, next) => {
 var updateUserStatus2 = async (req, res, next) => {
   try {
     const { userId } = req.params;
-    const result = await AdminService.updateUserStatus(userId, req.body);
+    const result = await AdminService.updateUserStatus(userId, req.body, req.user.role);
     res.status(200).json({
       success: true,
       message: "User status updated successfully",
@@ -2738,7 +3374,7 @@ var banUser = async (req, res, next) => {
     const result = await AdminService.updateUserStatus(userId, {
       status: "BANNED",
       banReason: banReason.trim()
-    });
+    }, req.user.role);
     res.status(200).json({
       success: true,
       message: "User banned successfully",
@@ -2753,7 +3389,7 @@ var unbanUser = async (req, res, next) => {
     const { userId } = req.params;
     const result = await AdminService.updateUserStatus(userId, {
       status: "ACTIVE"
-    });
+    }, req.user.role);
     res.status(200).json({
       success: true,
       message: "User unbanned successfully",
@@ -2826,18 +3462,112 @@ var cancelBooking4 = async (req, res, next) => {
     next(error);
   }
 };
-var AdminController = { login: login2, getUsers: getUsers2, updateUserStatus: updateUserStatus2, banUser, unbanUser, getAllBookings: getAllBookings2, cancelBooking: cancelBooking4, getPlatformStats: getPlatformStats2 };
+var verifyTutor2 = async (req, res, next) => {
+  try {
+    const { tutorProfileId } = req.params;
+    const result = await AdminService.verifyTutor(tutorProfileId);
+    res.status(200).json({
+      success: true,
+      message: "Tutor verified successfully",
+      data: result
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+var getProfile5 = async (req, res, next) => {
+  try {
+    const result = await AdminService.getAdminProfile(req.user.id);
+    res.status(200).json({
+      success: true,
+      message: "Admin profile retrieved successfully",
+      data: result
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+var updateProfile5 = async (req, res, next) => {
+  try {
+    const result = await AdminService.updateAdminProfile(req.user.id, req.body);
+    res.status(200).json({
+      success: true,
+      message: "Admin profile updated successfully",
+      data: result
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+var getAllKnowledge2 = async (req, res, next) => {
+  try {
+    const result = await AdminService.getAllKnowledge();
+    res.status(200).json({
+      success: true,
+      data: result
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+var addKnowledge2 = async (req, res, next) => {
+  try {
+    const { content, metadata } = req.body;
+    const result = await AdminService.addKnowledge(content, metadata);
+    res.status(201).json({
+      success: true,
+      message: "Knowledge added consistently across the platform intelligence network",
+      data: result
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+var deleteKnowledge2 = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    await AdminService.deleteKnowledge(id);
+    res.status(200).json({
+      success: true,
+      message: "Knowledge entry purged from platform memory"
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+var AdminController = {
+  login: login2,
+  getUsers: getUsers2,
+  updateUserStatus: updateUserStatus2,
+  banUser,
+  unbanUser,
+  getAllBookings: getAllBookings2,
+  cancelBooking: cancelBooking4,
+  getPlatformStats: getPlatformStats2,
+  verifyTutor: verifyTutor2,
+  getProfile: getProfile5,
+  updateProfile: updateProfile5,
+  getAllKnowledge: getAllKnowledge2,
+  addKnowledge: addKnowledge2,
+  deleteKnowledge: deleteKnowledge2
+};
 
 // src/modules/admin/admin/admin.route.ts
 var router4 = Router4();
 router4.post("/login", AdminController.login);
-router4.get("/users", auth_default("ADMIN" /* ADMIN */), AdminController.getUsers);
-router4.patch("/users/:userId/status", auth_default("ADMIN" /* ADMIN */), AdminController.updateUserStatus);
-router4.patch("/users/:userId/ban", auth_default("ADMIN" /* ADMIN */), AdminController.banUser);
-router4.patch("/users/:userId/unban", auth_default("ADMIN" /* ADMIN */), AdminController.unbanUser);
-router4.get("/bookings", auth_default("ADMIN" /* ADMIN */), AdminController.getAllBookings);
-router4.patch("/bookings/:bookingId/cancel", auth_default("ADMIN" /* ADMIN */), AdminController.cancelBooking);
-router4.get("/stats", auth_default("ADMIN" /* ADMIN */), AdminController.getPlatformStats);
+router4.get("/users", auth_default("ADMIN" /* ADMIN */, "SUPER_ADMIN" /* SUPER_ADMIN */), AdminController.getUsers);
+router4.patch("/users/:userId/status", auth_default("SUPER_ADMIN" /* SUPER_ADMIN */), AdminController.updateUserStatus);
+router4.patch("/users/:userId/ban", auth_default("SUPER_ADMIN" /* SUPER_ADMIN */), AdminController.banUser);
+router4.patch("/users/:userId/unban", auth_default("SUPER_ADMIN" /* SUPER_ADMIN */), AdminController.unbanUser);
+router4.get("/bookings", auth_default("ADMIN" /* ADMIN */, "SUPER_ADMIN" /* SUPER_ADMIN */), AdminController.getAllBookings);
+router4.patch("/bookings/:bookingId/cancel", auth_default("SUPER_ADMIN" /* SUPER_ADMIN */), AdminController.cancelBooking);
+router4.get("/stats", auth_default("ADMIN" /* ADMIN */, "SUPER_ADMIN" /* SUPER_ADMIN */), AdminController.getPlatformStats);
+router4.patch("/verify-tutor/:tutorProfileId", auth_default("SUPER_ADMIN" /* SUPER_ADMIN */), AdminController.verifyTutor);
+router4.get("/profile", auth_default("ADMIN" /* ADMIN */, "SUPER_ADMIN" /* SUPER_ADMIN */), AdminController.getProfile);
+router4.patch("/profile", auth_default("ADMIN" /* ADMIN */, "SUPER_ADMIN" /* SUPER_ADMIN */), AdminController.updateProfile);
+router4.get("/kb", auth_default("SUPER_ADMIN" /* SUPER_ADMIN */), AdminController.getAllKnowledge);
+router4.post("/kb", auth_default("SUPER_ADMIN" /* SUPER_ADMIN */), AdminController.addKnowledge);
+router4.delete("/kb/:id", auth_default("SUPER_ADMIN" /* SUPER_ADMIN */), AdminController.deleteKnowledge);
 var AdminRoutes = router4;
 
 // src/modules/admin/category/category.routes.ts
@@ -3378,13 +4108,264 @@ router5.patch("/subjects/:subjectId", auth_default("ADMIN" /* ADMIN */), Categor
 router5.delete("/subjects/:subjectId", auth_default("ADMIN" /* ADMIN */), CategoryController.deleteSubject);
 var CategoryRoutes = router5;
 
+// src/modules/ai/ai.route.ts
+import { Router as Router6 } from "express";
+
+// src/modules/ai/ai.controller.ts
+var AIController = {
+  chat: async (req, res) => {
+    try {
+      const { messages } = req.body;
+      const apiKey = process.env.OPENROUTER_API_KEY;
+      if (!apiKey) {
+        return res.status(500).json({
+          success: false,
+          message: "OpenRouter API Key not configured"
+        });
+      }
+      const lastUserMessage = messages[messages.length - 1]?.content;
+      let context = "";
+      if (lastUserMessage) {
+        try {
+          const queryEmbedding = await AIService.getEmbedding(lastUserMessage);
+          context = await AIService.retrieveContext(queryEmbedding);
+        } catch (e) {
+          console.warn("RAG Context Retrieval Failed, proceeding without context:", e);
+        }
+      }
+      const response2 = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${apiKey}`,
+          "HTTP-Referer": process.env.APP_URL || "http://localhost:3000",
+          "X-Title": "SkillBridge Learning Assistant",
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          model: "google/gemini-2.0-flash-001",
+          messages: [
+            {
+              role: "system",
+              content: `
+        You are the "SkillBridge Smart Matching AI". Your primary mission is to help students find their "Perfect Match" tutor.
+        
+        RULES:
+        1. Contextual Intelligence: Use the Real Tutor Profiles provided in the context below.
+        2. No Placeholders: Never use [Tutor Name] or similar brackets.
+        3. Link Format: For each tutor, display their profile URL on a new line at the end of their section.
+           URL Format: ${process.env.APP_URL || "http://localhost:3000"}/tutors/{ID}
+        4. No Repetition: Do not include the link inside the recommendation note text.
+        5. Empty Context Handling: If the "Current Context" below says "No tutors found", explain kindly that we couldn't find exact matches for their specific criteria. Suggest they try browsing the full marketplace or adjusting their search. Use a helpful, encouraging tone.
+
+        Structure your response as follows:
+        - A brief intro.
+        - 1. **Tutor Name** (Price/hr) - The recommendation note.
+        - ${process.env.APP_URL || "http://localhost:3000"}/tutors/{ID}
+        - (Repeat for top 3 tutors)
+
+        Current Context from Database:
+        ${context ? context : "No tutors found."}`
+            },
+            ...messages
+          ]
+        })
+      });
+      const data = await response2.json();
+      if (data.error) {
+        throw new Error(data.error.message || "OpenRouter API Error");
+      }
+      res.status(200).json({
+        success: true,
+        data: data.choices[0].message
+      });
+    } catch (error) {
+      console.error("AI Chat Error:", error);
+      res.status(500).json({
+        success: false,
+        message: error.message || "Failed to process AI request"
+      });
+    }
+  },
+  generateRoadmap: async (req, res) => {
+    try {
+      const { goal, level, tutorId } = req.body;
+      const apiKey = process.env.OPENROUTER_API_KEY;
+      if (!apiKey) {
+        return res.status(500).json({ success: false, message: "OpenRouter API Key not configured" });
+      }
+      let tutorContext = "";
+      if (tutorId) {
+        tutorContext = await AIService.getTutorContext(tutorId);
+      }
+      const response2 = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${apiKey}`,
+          "HTTP-Referer": process.env.APP_URL || "http://localhost:3000",
+          "X-Title": "SkillBridge Roadmap Generator",
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          model: "google/gemini-2.0-flash-001",
+          response_format: { type: "json_object" },
+          messages: [
+            {
+              role: "system",
+              content: `
+              You are the "SkillBridge Roadmap Genius". 
+              Your job is to create a highly professional, 4-week learning roadmap.
+              
+              Input:
+              - Student Goal: ${goal}
+              - Experience Level: ${level}
+              - Tutor Context: ${tutorContext || "Generic roadmap needed"}
+
+              Output MUST be a JSON object with the following structure:
+              {
+                "title": "A catchy title for the roadmap",
+                "overview": "A brief summary of what will be achieved",
+                "phases": [
+                  {
+                    "week": 1,
+                    "title": "Phase Title",
+                    "objectives": ["Obj 1", "Obj 2"],
+                    "tutorSessions": "What to focus on during sessions with the tutor"
+                  },
+                  ... (continue for 4 weeks)
+                ],
+                "milestoneProject": "A specific project description",
+                "recommendedResources": ["Resource Name - Brief Description"]
+              }
+              `
+            },
+            {
+              role: "user",
+              content: `Plan for: ${goal}`
+            }
+          ]
+        })
+      });
+      const data = await response2.json();
+      const roadmap = JSON.parse(data.choices[0].message.content);
+      res.status(200).json({
+        success: true,
+        data: roadmap
+      });
+    } catch (error) {
+      console.error("Roadmap Generation Error:", error);
+      res.status(500).json({
+        success: false,
+        message: error.message || "Failed to generate roadmap"
+      });
+    }
+  }
+};
+
+// src/modules/ai/ai.route.ts
+var router6 = Router6();
+router6.post("/chat", AIController.chat);
+router6.post("/roadmap", AIController.generateRoadmap);
+var AIRoutes = router6;
+
+// src/modules/upload/upload.route.ts
+import { Router as Router7 } from "express";
+
+// src/lib/cloudinary.ts
+import { v2 as cloudinary } from "cloudinary";
+import { CloudinaryStorage } from "multer-storage-cloudinary";
+import multer from "multer";
+cloudinary.config({
+  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+  api_key: process.env.CLOUDINARY_API_KEY,
+  api_secret: process.env.CLOUDINARY_API_SECRET
+});
+var storage = new CloudinaryStorage({
+  cloudinary,
+  params: {
+    // @ts-ignore
+    folder: "skillbridge_profiles",
+    allowed_formats: ["jpg", "png", "jpeg", "webp"],
+    transformation: [{ width: 500, height: 500, crop: "limit" }]
+  }
+});
+var upload = multer({ storage });
+
+// src/modules/upload/upload.controller.ts
+var UploadController = class {
+  static async uploadImage(req, res) {
+    try {
+      if (!req.file) {
+        return res.status(400).json({
+          success: false,
+          message: "No file uploaded"
+        });
+      }
+      const file = req.file;
+      res.status(200).json({
+        success: true,
+        message: "Image uploaded successfully",
+        data: {
+          url: file.path,
+          // This is the Cloudinary URL
+          public_id: file.filename
+        }
+      });
+    } catch (error) {
+      console.error("Upload error:", error);
+      res.status(500).json({
+        success: false,
+        message: "Failed to upload image",
+        error: error.message
+      });
+    }
+  }
+};
+
+// src/modules/upload/upload.route.ts
+import { fromNodeHeaders } from "better-auth/node";
+var router7 = Router7();
+var checkAuth = async (req, res, next) => {
+  const session = await auth.api.getSession({
+    headers: fromNodeHeaders(req.headers)
+  });
+  if (!session) {
+    return res.status(401).json({ success: false, message: "Unauthorized" });
+  }
+  req.user = session.user;
+  next();
+};
+router7.post("/image", checkAuth, upload.single("image"), UploadController.uploadImage);
+var upload_route_default = router7;
+
 // src/app.ts
 import hpp from "hpp";
 import { rateLimit } from "express-rate-limit";
 import cookieParser from "cookie-parser";
 
 // src/modules/auth/auth.routes.ts
-import { Router as Router6 } from "express";
+import { Router as Router8 } from "express";
+
+// src/modules/auth/session.service.ts
+import { randomBytes } from "crypto";
+var SESSION_TTL = 7 * 24 * 60 * 60;
+var sessionService = {
+  async create(userId, email, role, emailVerified, name, metadata, existingSessionId) {
+    const sessionId = existingSessionId || randomBytes(32).toString("hex");
+    return sessionId;
+  },
+  async get(sessionId) {
+    return null;
+  },
+  async delete(sessionId) {
+  },
+  async deleteAllUserSessions(userId) {
+  },
+  async getUserSessions(userId) {
+    return [];
+  },
+  async deleteOtherSessions(userId, currentSessionId) {
+  }
+};
 
 // src/modules/auth/auth.controller.ts
 var COOKIE_NAME = "sessionId";
@@ -3431,7 +4412,7 @@ var logout = async (req, res, next) => {
     if (sessionId) {
       await sessionService.delete(sessionId);
       try {
-        const { auth: betterAuth } = await import("./auth-LITCF3FX.js");
+        const { auth: betterAuth } = await import("./auth-NOG2KVN7.js");
         await betterAuth.api.signOut({
           headers: req.headers
         });
@@ -3480,52 +4461,29 @@ var sessionAuth = async (req, res, next) => {
       return res.status(401).json({ success: false, message: "No session found" });
     }
     let sessionData = null;
-    try {
-      sessionData = await sessionService.get(rawToken);
-    } catch (redisError) {
-      console.error("Redis Cache Error:", redisError);
+    const { auth: betterAuth } = await import("./auth-NOG2KVN7.js");
+    const dbSession = await betterAuth.api.getSession({
+      headers: req.headers
+    });
+    if (!dbSession) {
+      res.clearCookie("sessionId", { path: "/" });
+      res.clearCookie("better-auth.session_token", { path: "/" });
+      return res.status(401).json({ success: false, message: "Invalid or expired session" });
     }
-    if (!sessionData) {
-      const { auth: betterAuth } = await import("./auth-LITCF3FX.js");
-      const dbSession = await betterAuth.api.getSession({
-        headers: req.headers
-      });
-      if (!dbSession) {
-        res.clearCookie("sessionId", { path: "/" });
-        res.clearCookie("better-auth.session_token", { path: "/" });
-        return res.status(401).json({ success: false, message: "Invalid or expired session" });
+    sessionData = {
+      userId: dbSession.user.id,
+      email: dbSession.user.email,
+      role: dbSession.user.role,
+      emailVerified: dbSession.user.emailVerified,
+      name: dbSession.user.name,
+      sessionId: rawToken,
+      metadata: {
+        userAgent: req.headers["user-agent"] || "unknown",
+        ip: req.ip || "unknown",
+        createdAt: (/* @__PURE__ */ new Date()).toISOString(),
+        lastAccessedAt: (/* @__PURE__ */ new Date()).toISOString()
       }
-      try {
-        await sessionService.create(
-          dbSession.user.id,
-          dbSession.user.email,
-          dbSession.user.role,
-          dbSession.user.emailVerified,
-          dbSession.user.name,
-          {
-            userAgent: req.headers["user-agent"] || "unknown",
-            ip: req.ip || "unknown"
-          },
-          rawToken
-        );
-      } catch (e) {
-        console.error("Failed to hydrate Redis:", e);
-      }
-      sessionData = {
-        userId: dbSession.user.id,
-        email: dbSession.user.email,
-        role: dbSession.user.role,
-        emailVerified: dbSession.user.emailVerified,
-        name: dbSession.user.name,
-        sessionId: rawToken,
-        metadata: {
-          userAgent: req.headers["user-agent"] || "unknown",
-          ip: req.ip || "unknown",
-          createdAt: (/* @__PURE__ */ new Date()).toISOString(),
-          lastAccessedAt: (/* @__PURE__ */ new Date()).toISOString()
-        }
-      };
-    }
+    };
     req.user = {
       id: sessionData.userId,
       email: sessionData.email,
@@ -3541,14 +4499,173 @@ var sessionAuth = async (req, res, next) => {
 };
 
 // src/modules/auth/auth.routes.ts
-var router6 = Router6();
-router6.post("/login", login3);
-router6.post("/logout", logout);
-router6.post("/logout-all", sessionAuth, logoutAll);
-router6.get("/sessions", sessionAuth, getSessions);
-var authRoutes = router6;
+var router8 = Router8();
+router8.post("/login", login3);
+router8.post("/logout", logout);
+router8.post("/logout-all", sessionAuth, logoutAll);
+router8.get("/sessions", sessionAuth, getSessions);
+var authRoutes = router8;
 
 // src/app.ts
+import client from "prom-client";
+
+// src/modules/payment/payment.route.ts
+import { Router as Router9 } from "express";
+
+// src/lib/stripe.ts
+import Stripe from "stripe";
+if (!process.env.STRIPE_SECRET_KEY) {
+  throw new Error("STRIPE_SECRET_KEY is not defined in environment variables");
+}
+var stripe = new Stripe(process.env.STRIPE_SECRET_KEY, {
+  apiVersion: "2025-02-24.acacia"
+  // Use the latest API version or a stable one
+});
+
+// src/modules/payment/payment.service.ts
+import { randomUUID as randomUUID4 } from "crypto";
+var PaymentService = class {
+  static async createCheckoutSession(userId, bookingData) {
+    const tutorProfile = await prisma.tutor_profile.findUnique({
+      where: { id: bookingData.tutorProfileId },
+      include: { user: true }
+    });
+    if (!tutorProfile || !tutorProfile.isAvailable || tutorProfile.user.status !== "ACTIVE") {
+      throw new Error("Tutor is not available");
+    }
+    const scheduledDate = new Date(bookingData.scheduledAt);
+    if (scheduledDate <= /* @__PURE__ */ new Date()) {
+      throw new Error("Booking time must be in the future");
+    }
+    const scheduledDateOnly = new Date(scheduledDate);
+    scheduledDateOnly.setUTCHours(0, 0, 0, 0);
+    const hours = scheduledDate.getUTCHours();
+    const minutes = scheduledDate.getUTCMinutes();
+    const timeString = `${hours.toString().padStart(2, "0")}:${minutes.toString().padStart(2, "0")}`;
+    const availabilitySlot = await prisma.availability_slot.findFirst({
+      where: {
+        tutorProfileId: bookingData.tutorProfileId,
+        specificDate: scheduledDateOnly,
+        startTime: timeString,
+        isBooked: false
+      }
+    });
+    if (!availabilitySlot) {
+      throw new Error("This time slot is not available in the tutor's schedule");
+    }
+    const price = bookingData.duration / 60 * tutorProfile.hourlyRate;
+    const amountInCents = Math.round(price * 100);
+    const booking = await prisma.booking.create({
+      data: {
+        id: randomUUID4(),
+        studentId: userId,
+        tutorProfileId: bookingData.tutorProfileId,
+        availabilitySlotId: availabilitySlot.id,
+        scheduledAt: scheduledDate,
+        duration: bookingData.duration,
+        subject: bookingData.subject,
+        notes: bookingData.notes,
+        price,
+        status: "PENDING"
+      }
+    });
+    const session = await stripe.checkout.sessions.create({
+      payment_method_types: ["card"],
+      line_items: [
+        {
+          price_data: {
+            currency: "usd",
+            product_data: {
+              name: `Session with ${tutorProfile.user.name}`,
+              description: `${bookingData.subject} on ${scheduledDate.toLocaleDateString()}`
+            },
+            unit_amount: amountInCents
+          },
+          quantity: 1
+        }
+      ],
+      mode: "payment",
+      success_url: `${process.env.STRIPE_SUCCESS_URL}?session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: process.env.STRIPE_CANCEL_URL,
+      metadata: {
+        bookingId: booking.id,
+        userId
+      }
+    });
+    return {
+      sessionId: session.id,
+      checkoutUrl: session.url,
+      bookingId: booking.id
+    };
+  }
+  static async handleWebhook(payload, signature) {
+    let event;
+    try {
+      event = stripe.webhooks.constructEvent(
+        payload,
+        signature,
+        process.env.STRIPE_WEBHOOK_SECRET
+      );
+    } catch (err) {
+      throw new Error(`Webhook Error: ${err.message}`);
+    }
+    if (event.type === "checkout.session.completed") {
+      const session = event.data.object;
+      const bookingId = session.metadata.bookingId;
+      await prisma.$transaction(async (tx) => {
+        const booking = await tx.booking.update({
+          where: { id: bookingId },
+          data: { status: "CONFIRMED" }
+        });
+        if (booking.availabilitySlotId) {
+          await tx.availability_slot.update({
+            where: { id: booking.availabilitySlotId },
+            data: { isBooked: true }
+          });
+        }
+      });
+    }
+    return { received: true };
+  }
+};
+
+// src/modules/payment/payment.controller.ts
+var PaymentController = class {
+  static async createCheckoutSession(req, res, next) {
+    try {
+      const result = await PaymentService.createCheckoutSession(req.user.id, req.body);
+      res.status(200).json({
+        success: true,
+        message: "Checkout session created",
+        data: result
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+  static async handleWebhook(req, res, next) {
+    try {
+      const sig = req.headers["stripe-signature"];
+      const result = await PaymentService.handleWebhook(req.body, sig);
+      res.status(200).json(result);
+    } catch (error) {
+      console.error("Webhook Error:", error.message);
+      res.status(400).send(`Webhook Error: ${error.message}`);
+    }
+  }
+};
+
+// src/modules/payment/payment.route.ts
+var router9 = Router9();
+router9.post(
+  "/create-checkout-session",
+  auth_default("STUDENT" /* STUDENT */),
+  PaymentController.createCheckoutSession
+);
+var PaymentRoutes = router9;
+
+// src/app.ts
+client.collectDefaultMetrics();
 var app = express();
 app.set("trust proxy", true);
 app.use(cors({
@@ -3574,21 +4691,28 @@ if (process.env.NODE_ENV === "production") {
   app.use(limiter);
 }
 app.use(cookieParser());
+app.post("/api/payment/webhook", express.raw({ type: "application/json" }), PaymentController.handleWebhook);
 app.use(express.json({ limit: "10kb" }));
 app.use(hpp());
+app.use("/api/payment", PaymentRoutes);
 app.all("/api/auth", toNodeHandler(auth));
 app.all("/api/auth/*rest", toNodeHandler(auth));
+app.use("/api/upload", upload_route_default);
 app.use("/api/public", PublicRoutes);
 app.use("/api/student", StudentRoutes);
 app.use("/api/tutor", TutorRoutes);
 app.use("/api/admin", AdminRoutes);
 app.use("/api/admin", CategoryRoutes);
+app.use("/api/ai", AIRoutes);
 app.get("/", (req, res) => {
   res.status(200).json({ status: "ok", message: "Server is healthy" });
 });
+app.get("/metrics", async (req, res) => {
+  res.set("Content-Type", client.register.contentType);
+  res.send(await client.register.metrics());
+});
 app.use("/api/session-auth", authRoutes);
 var initializeAppServices = async () => {
-  await connectRedis();
 };
 app.use(notFound);
 app.use(globalErrorHandler_default);

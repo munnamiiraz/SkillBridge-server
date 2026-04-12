@@ -574,10 +574,33 @@ const updateBookingStatus = async (userId: string, bookingId: string, data: { st
       });
     }
 
+    // Generate meeting link if status is CONFIRMED or ONGOING and no link exists
+    let meetingLinkUpdate = {};
+    if (['CONFIRMED', 'ONGOING'].includes(data.status) && !booking.meetingLink) {
+      const { createGoogleMeet } = await import("../../lib/google-calendar");
+      
+      // Try to create real Google Meet
+      const realMeetLink = await createGoogleMeet(
+        userId, 
+        booking.subject || 'Tutoring Session', 
+        booking.scheduledAt, 
+        booking.duration
+      );
+
+      if (realMeetLink) {
+        meetingLinkUpdate = { meetingLink: realMeetLink };
+      } else {
+        // Fallback to mock link if Google API fails or user hasn't connected Google
+        const meetCode = randomUUID().split('-').slice(0, 3).join('-');
+        meetingLinkUpdate = { meetingLink: `https://meet.google.com/${meetCode}` };
+      }
+    }
+
     const updatedBooking = await tx.booking.update({
       where: { id: bookingId },
       data: {
         status: data.status as any,
+        ...meetingLinkUpdate,
         updatedAt: new Date()
       },
       include: {
@@ -866,8 +889,9 @@ const getEarningsStats = async (userId: string) => {
   }
 
   bookings.forEach(b => {
-    const monthKey = monthNames[new Date(b.scheduledAt).getMonth()];
-    if (statsMap[monthKey] !== undefined) {
+    const m = new Date(b.scheduledAt).getUTCMonth();
+    const monthKey = monthNames[m];
+    if (monthKey && statsMap[monthKey] !== undefined) {
       statsMap[monthKey] += b.price;
     }
   });
@@ -912,7 +936,9 @@ const getTutorAnalytics = async (userId: string) => {
   // Process Student Retention
   const studentFrequency: Record<string, number> = {};
   studentBookings.forEach(b => {
-    studentFrequency[b.studentId] = (studentFrequency[b.studentId] || 0) + 1;
+    if (b.studentId) {
+      studentFrequency[b.studentId] = (studentFrequency[b.studentId] || 0) + 1;
+    }
   });
 
   const uniqueStudents = Object.keys(studentFrequency).length;

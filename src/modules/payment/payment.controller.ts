@@ -27,4 +27,19 @@ export class PaymentController {
       res.status(400).send(`Webhook Error: ${error.message}`);
     }
   }
+
+  static async getSessionDetails(req: Request, res: Response, next: NextFunction) {
+    try {
+      const { sessionId } = req.params;
+      const result = await PaymentService.getSessionDetails(sessionId as string);
+      
+      res.status(200).json({
+        success: true,
+        message: "Session details retrieved",
+        data: result
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
 }
