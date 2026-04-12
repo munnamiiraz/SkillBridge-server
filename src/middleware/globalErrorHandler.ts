@@ -1,6 +1,5 @@
-import { NextFunction, Request, Response } from "express"
-import pkg from "../generated/prisma/index.js";
-const { Prisma } = pkg;
+import { NextFunction, Request, Response } from "express";
+import { Prisma } from "@prisma/client";
 
 function errorHandler(
     err: any,

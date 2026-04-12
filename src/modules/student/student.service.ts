@@ -144,12 +144,12 @@ const createReview = async (
       ? allReviews.reduce((sum: number , r: any) => sum + r.rating, 0) / totalReviews
       : 0;
 
-    // Update tutor profile with new stats
+    // 🚀 FIXED: Use atomic increment to preserve historical totals
     await tx.tutor_profile.update({
       where: { id: tutorProfileId },
       data: {
-        totalReviews: totalReviews,
-        averageRating: Math.round(averageRating * 10) / 10, // Round to 1 decimal
+        totalReviews: { increment: 1 }, 
+        averageRating: Math.round(averageRating * 10) / 10, // Recalculate based on all physical review records
         updatedAt: new Date()
       }
     });

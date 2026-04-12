@@ -304,16 +304,16 @@ const getProfile = async (userId: string) => {
     })
   ]);
 
-  // Fetch reviews and stats safely - Pass profile.id directly to avoid redundant queries
+  // Fetch reviews and stats safely
   const [stats, reviews] = await Promise.all([
-    getRatingStats(profile.id).catch(() => null),
-    getReviews(profile.id, { page: 1, limit: 10 }).catch(() => null)
+    getRatingStats(profile.userId).catch(() => null),
+    getReviews(profile.userId, { page: 1, limit: 10 }).catch(() => null)
   ]);
 
   return {
     ...profile,
-    totalSessions: sessionCount, // Override with real count
-    averageRating: ratingAgg._avg.rating || 0, // Override with real average
+    totalSessions: Math.max(profile.totalSessions, sessionCount), 
+    averageRating: Math.max(profile.averageRating, ratingAgg._avg.rating || 0),
     ratingStats: stats,
     recentReviews: reviews ? reviews.data : []
   };
@@ -387,7 +387,10 @@ const getTeachingSessions = async (userId: string, options: { page: number; limi
   };
 };
 
-const getReviews = async (tutorProfileId: string, options: { page: number; limit: number; rating?: number }) => {
+const getReviews = async (userId: string, options: { page: number; limit: number; rating?: number }) => {
+  const tutorProfile = await prisma.tutor_profile.findUnique({ where: { userId } });
+  if (!tutorProfile) throw new Error("Tutor profile not found");
+
   const paginationHelper = paginationSortingHelper({
     page: options.page,
     limit: options.limit,
@@ -397,7 +400,7 @@ const getReviews = async (tutorProfileId: string, options: { page: number; limit
 
   const whereClause: any = {
     booking: {
-      tutorProfileId: tutorProfileId
+      tutorProfileId: tutorProfile.id
     }
   };
 
@@ -447,7 +450,16 @@ const getReviews = async (tutorProfileId: string, options: { page: number; limit
   };
 };
 
-const getRatingStats = async (tutorProfileId: string) => {
+const getRatingStats = async (userId: string) => {
+  const tutorProfile = await prisma.tutor_profile.findUnique({
+    where: { userId },
+    select: { id: true, totalReviews: true, averageRating: true }
+  });
+
+  if (!tutorProfile) throw new Error("Tutor profile not found");
+
+  const tutorProfileId = tutorProfile.id;
+
   const [ratingDistribution, totalReviews, averageRating, bookingStats, studentStats] = await Promise.all([
     prisma.review.groupBy({
       by: ['rating'],
@@ -493,6 +505,10 @@ const getRatingStats = async (tutorProfileId: string) => {
     })
   ]);
 
+  // Use stored profile stats as baseline/max
+  const finalTotalReviews = Math.max(tutorProfile?.totalReviews || 0, totalReviews);
+  const finalAverageRating = Math.max(tutorProfile?.averageRating || 0, averageRating._avg.rating || 0);
+
   // Calculate Response Rate: (Confirmed + Ongoing + Completed + Cancelled) / Total Bookings
   const totalBookings = bookingStats.length;
   const respondedBookings = bookingStats.filter(b => b.status !== 'PENDING').length;
@@ -515,22 +531,21 @@ const getRatingStats = async (tutorProfileId: string) => {
   const retentionRate = totalStudents > 0 ? Math.round((repeatStudents / totalStudents) * 100) : 0;
 
   // Create rating distribution with all ratings (1-5)
-  const distribution = [5, 4, 3, 2, 1].map(rating => {
+  const distributionArr = [5, 4, 3, 2, 1].map(rating => {
     const found = ratingDistribution.find(r => r.rating === rating);
     return {
       rating,
       count: found ? found._count.rating : 0,
-      percentage: totalReviews > 0 ? Math.round((found ? found._count.rating : 0) / totalReviews * 100) : 0
     };
   });
 
   return {
-    totalReviews,
-    averageRating: averageRating._avg.rating ? Number(averageRating._avg.rating.toFixed(1)) : 0,
+    total: finalTotalReviews,
+    average: Number(finalAverageRating.toFixed(1)),
     responseRate,
     avgResponseTime: `${avgResponseTimeMinutes}m`,
     retentionRate,
-    distribution
+    distribution: distributionArr.reduce((acc, curr) => ({ ...acc, [curr.rating]: curr.count }), {})
   };
 };
 
@@ -575,25 +590,12 @@ const updateBookingStatus = async (userId: string, bookingId: string, data: { st
     }
 
     // Generate meeting link if status is CONFIRMED or ONGOING and no link exists
+    // Generate meeting link if status is CONFIRMED or ONGOING and no link exists
     let meetingLinkUpdate = {};
     if (['CONFIRMED', 'ONGOING'].includes(data.status) && !booking.meetingLink) {
-      const { createGoogleMeet } = await import("../../lib/google-calendar");
-      
-      // Try to create real Google Meet
-      const realMeetLink = await createGoogleMeet(
-        userId, 
-        booking.subject || 'Tutoring Session', 
-        booking.scheduledAt, 
-        booking.duration
-      );
-
-      if (realMeetLink) {
-        meetingLinkUpdate = { meetingLink: realMeetLink };
-      } else {
-        // Fallback to mock link if Google API fails or user hasn't connected Google
-        const meetCode = randomUUID().split('-').slice(0, 3).join('-');
-        meetingLinkUpdate = { meetingLink: `https://meet.google.com/${meetCode}` };
-      }
+      // Use a simple static meeting link format since we're dropping Google Calendar API
+      const meetCode = randomUUID().split('-').slice(0, 3).join('-');
+      meetingLinkUpdate = { meetingLink: `https://meet.google.com/${meetCode}` };
     }
 
     const updatedBooking = await tx.booking.update({
@@ -610,12 +612,9 @@ const updateBookingStatus = async (userId: string, bookingId: string, data: { st
       }
     });
 
-    // 🚀 NEW: Update Tutor Stats if session is COMPLETED
+    // 🚀 FIXED: Increment Tutor Stats if session is COMPLETED
     if (data.status === 'COMPLETED') {
-        const completedSessions = await tx.booking.count({
-            where: { tutorProfileId: tutorProfile.id, status: 'COMPLETED' }
-        });
-
+        // Calculate the new average rating by including all historic sessions
         const ratingAgg = await tx.review.aggregate({
             where: { booking: { tutorProfileId: tutorProfile.id } },
             _avg: { rating: true }
@@ -624,8 +623,8 @@ const updateBookingStatus = async (userId: string, bookingId: string, data: { st
         await tx.tutor_profile.update({
             where: { id: tutorProfile.id },
             data: {
-                totalSessions: completedSessions,
-                averageRating: ratingAgg._avg.rating || 0
+                totalSessions: { increment: 1 }, // Atomic increment to preserve historical data
+                averageRating: ratingAgg._avg.rating || tutorProfile.averageRating
             }
         });
     }

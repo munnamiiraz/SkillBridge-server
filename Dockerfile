@@ -1,25 +1,41 @@
-# Use Node.js 20 Alpine for smaller image size
-FROM node:20-alpine
+# stage 1: builder
+FROM node:20-alpine AS builder
 
-# Set working directory
 WORKDIR /app
 
-# Copy package files and Prisma schema
+# Install build dependencies (openssl is required for Prisma)
+RUN apk add --no-cache openssl
+
 COPY package*.json ./
 COPY prisma ./prisma/
-COPY prisma.config.ts ./
 
-# Install dependencies (this will run prisma generate via postinstall)
 RUN npm install --legacy-peer-deps
 
-# Copy source code
 COPY . .
 
-# Build the application
+# Generate Prisma Client
+RUN npx prisma generate
+
+# Build the app (outputs to /app/api based on package.json)
 RUN npm run build
 
-# Expose port
+# stage 2: runner
+FROM node:20-alpine AS runner
+
+WORKDIR /app
+
+# Re-install openssl in runner stage
+RUN apk add --no-cache openssl
+
+COPY --from=builder /app/package*.json ./
+COPY --from=builder /app/node_modules ./node_modules
+COPY --from=builder /app/api ./api
+COPY --from=builder /app/prisma ./prisma
+COPY --from=builder /app/prisma.config.ts ./prisma.config.ts
+
+ENV NODE_ENV=production
+
 EXPOSE 10000
 
-# Start the application with migrations
+# Run migrations and start the app (using the prod start script)
 CMD ["npm", "run", "start:prod"]

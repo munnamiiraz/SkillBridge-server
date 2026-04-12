@@ -60,11 +60,14 @@ export class PaymentService {
         scheduledAt: scheduledDate,
         duration: bookingData.duration,
         subject: bookingData.subject,
-        notes: bookingData.notes,
+        notes: bookingData.notes || null,
         price: price,
         status: "PENDING"
       }
     });
+
+    const successUrl = process.env.STRIPE_SUCCESS_URL || 'http://localhost:3000/booking/success';
+    const cancelUrl = process.env.STRIPE_CANCEL_URL || 'http://localhost:3000/booking/cancel';
 
     // 5. Create Stripe Session
     const session = await stripe.checkout.sessions.create({
@@ -83,8 +86,8 @@ export class PaymentService {
         },
       ],
       mode: 'payment',
-      success_url: `${process.env.STRIPE_SUCCESS_URL}?session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: process.env.STRIPE_CANCEL_URL,
+      success_url: `${successUrl}?session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: cancelUrl,
       metadata: {
         bookingId: booking.id,
         userId: userId

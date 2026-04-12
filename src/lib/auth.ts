@@ -3,11 +3,11 @@ import { prismaAdapter } from "better-auth/adapters/prisma";
 import { prisma } from "./prisma.js";
 
 
-const isProduction = process.env.NODE_ENV === "production" || !!process.env.RENDER;
+const isProduction = process.env.NODE_ENV === "production" || process.env.RENDER === "true";
 
 export const auth = betterAuth({
   secret: process.env.BETTER_AUTH_SECRET,
-  baseURL: (process.env.BETTER_AUTH_URL || process.env.NEXT_PUBLIC_API_URL || "http://localhost:9000") + "/api/auth",
+  baseURL: (process.env.BETTER_AUTH_URL || "https://skillbridge-server-9.onrender.com") + "/api/auth",
 
   session: {
     cookieCache: {
@@ -48,19 +48,11 @@ export const auth = betterAuth({
   // COOKIE / SECURITY CONFIG
   advanced: {
     defaultCookieAttributes: {
-      sameSite: isProduction ? "none" : "lax",
-      secure: isProduction,
+      sameSite: "none",
+      secure: true,
       httpOnly: true,
     },
     trustProxy: true,
-    cookies: {
-      state: {
-        attributes: {
-          sameSite: "none",
-          secure: true,
-        },
-      },
-    },
   },
 
   databaseHooks: {
@@ -100,8 +92,7 @@ export const auth = betterAuth({
       clientSecret: process.env.GOOGLE_CLIENT_SECRET as string,
       scope: [
         "https://www.googleapis.com/auth/userinfo.profile",
-        "https://www.googleapis.com/auth/userinfo.email",
-        "https://www.googleapis.com/auth/calendar.events"
+        "https://www.googleapis.com/auth/userinfo.email"
       ],
       accessType: 'offline'
     },

@@ -11,7 +11,7 @@
     "format:check": "prettier --check \"src/**/*.ts\"",
     "dev": "nodemon --watch src --watch .env --ext ts,json --exec tsx src/index.ts",
     "dev:poll": "nodemon --watch src --watch .env --ext ts,json --legacy-watch --exec tsx src/index.ts",
-    "build": "prisma generate && tsup src/index.ts --format esm --platform node --target node20 --outDir api --external pg-native",
+    "build": "prisma generate && tsup src/index.ts --format esm --platform node --target node20 --outDir api --external pg-native --external @prisma/client --external .prisma/client --external better-auth --shims",
     "start": "node api/index.js",
     "start:prod": "prisma migrate deploy && node api/index.js",
     "seed:admin": "tsx src/scripts/seedAdmin.ts",

@@ -17,7 +17,7 @@ export const AIService = {
       })
     });
 
-    const data = await response.json();
+    const data = await response.json() as any;
     if (data.error) throw new Error(data.error.message);
     return data.data[0].embedding;
   },
